@@ -42,13 +42,22 @@ function TileArt({ type }) {
     case 'branch':
       return (
         <svg className="t-art" viewBox="0 0 40 40" aria-hidden="true">
-          <path d="M8 32 Q20 20 32 8 M14 26 L11 18 M14 26 L22 28 M20 20 L17 12 M20 20 L28 22 M26 14 L23 7 M26 14 L33 16" stroke="#F4A51D" strokeWidth="1.8" strokeLinecap="round" fill="none" />
+          <path d="M8 32 Q20 20 32 8 M14 26 L11 18 M14 26 L22 28 M20 20 L17 12 M20 20 L28 22 M26 14 L23 7 M26 14 L33 16" stroke="var(--gold, #F4A51D)" strokeWidth="1.8" strokeLinecap="round" fill="none" />
+          <circle
+              className="v"
+              cx="50"
+              cy="50"
+              r="42"
+              stroke="var(--gold, #F4A51D)"
+              strokeDasharray={C}
+              strokeDashoffset={C * (1 - me.missionsDone / 25)}
+            />
         </svg>
       );
     case 'snowflake':
       return (
         <svg className="t-art lg" viewBox="0 0 60 60" aria-hidden="true">
-          <g stroke="#F1E4D4" strokeWidth="1.8" strokeLinecap="round" fill="none">
+          <g stroke="var(--cream, #F1E4D4)" strokeWidth="1.8" strokeLinecap="round" fill="none">
             {[0, 60, 120].map((a) => (
               <g key={a} transform={`rotate(${a} 30 30)`}>
                 <line x1="30" y1="6" x2="30" y2="54" />
@@ -148,8 +157,65 @@ export const Avatar = ({ u, big }) => {
   );
 };
 
+export function CommunityTag({ community }) {
+  if (!community) return null;
+  const isKingdom = community === 'kingdom';
+  return (
+    <span className={`comm-tag ${isKingdom ? 'kingdom' : 'ducks'}`}>
+      <i className="comm-dot" />
+      <span>{isKingdom ? 'THE KINGDOM' : 'DUCKS'}</span>
+    </span>
+  );
+}
+
+/* ---------- Escolha de comunidade (membros nos 2 servidores) ---------- */
+export function ChooseCommunity({ onSelect }) {
+  const [busy, setBusy] = useState(false);
+
+  const pick = async (community) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await onSelect(community);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="glass hot choose-comm">
+      <p className="eyebrow">Identificação de Servidor</p>
+      <h2>Escolha o seu lado no festival</h2>
+      <p className="m">
+        Identificamos que você faz parte dos dois servidores no Discord. Como os eventos são separados, escolha em qual comunidade você vai participar (a tag ficará vinculada ao seu perfil):
+      </p>
+
+      <div className="comm-grid">
+        <button type="button" className="comm-card ducks" disabled={busy} onClick={() => pick('ducks')}>
+          <CommunityTag community="ducks" />
+          <h3>Evento Ducks</h3>
+          <p className="m">Missões, árvore de cartinhas e ranking exclusivos da Ducks.</p>
+        </button>
+
+        <button type="button" className="comm-card kingdom" disabled={busy} onClick={() => pick('kingdom')}>
+          <CommunityTag community="kingdom" />
+          <h3>Evento The Kingdom</h3>
+          <p className="m">Missões, árvore de cartinhas e ranking exclusivos da The Kingdom.</p>
+        </button>
+      </div>
+    </section>
+  );
+}
+
 /* ---------- Login ---------- */
 export function Login({ erro }) {
+  const errMsg =
+    erro === 'sem_servidor'
+      ? 'Você precisa estar no servidor da Ducks ou da The Kingdom no Discord para participar.'
+      : erro && erro.length > 20
+      ? erro
+      : 'Não foi possível entrar com o Discord. Tente novamente.';
+
   return (
     <section className="glass hot login">
       <div className="login-tree">
@@ -159,18 +225,14 @@ export function Login({ erro }) {
         <p className="eyebrow">25 dias · missões · prêmios</p>
         <h1>Entre para acender a sua luz</h1>
         <p className="m">
-          Faça login com o Discord para participar das missões, acumular Ducks e deixar cartinhas na árvore.
+          Faça login com o Discord para participar das missões, subir no ranking e deixar cartinhas na árvore.
         </p>
-        {erro && (
-          <div className="err">
-            {erro.length > 20 ? erro : 'Não foi possível entrar com o Discord. Tente novamente.'}
-          </div>
-        )}
+        {erro && <div className="err">{errMsg}</div>}
         <a className="btn dc big" href="/auth/discord">
           <Icon name="discord" size={20} />
           <span>Entrar com Discord</span>
         </a>
-        <p className="m small">Usamos só o seu nome e o avatar. Nunca postamos nada por você.</p>
+        <p className="m small">Verificamos seu servidor automaticamente para atribuir sua tag do evento.</p>
       </div>
     </section>
   );
@@ -247,14 +309,18 @@ export function Home({ me, ev, letters, onOpen, onWrite, onMission }) {
             <small>de 25</small>
           </div>
         </div>
-        <p className="m center">{me.points} Ducks acumulados</p>
+        <p className="m center">
+          {me.points != null
+            ? `${me.points} pontos acumulados`
+            : 'Pontos secretos · revelados no ranking final'}
+        </p>
         {m && (
           <>
             <h3>
               Dia {m.day} · {m.title}
             </h3>
             <p className="m">{m.objective}</p>
-            <p className="gain">+{m.points} Ducks</p>
+            {m.points != null && <p className="gain">+{m.points} pontos</p>}
             <button
               className={`btn ${m.status === 'done' ? 'pine' : m.status === 'pending' ? 'bronze' : ''}`}
               disabled={m.status === 'locked'}
@@ -321,9 +387,23 @@ export function Calendar({ ev, onMission }) {
               >
                 <span className="in">
                   <b className="big">
-                    {m.status === 'done' ? <Icon name="star" size={20} /> : `+${m.points}`}
+                    {m.status === 'done' ? (
+                      <Icon name="star" size={20} />
+                    ) : m.points != null ? (
+                      `+${m.points}`
+                    ) : (
+                      <Icon name="sparkles" size={18} />
+                    )}
                   </b>
-                  <small>{m.status === 'done' ? 'concluída' : m.status === 'pending' ? 'análise' : 'Ducks'}</small>
+                  <small>
+                    {m.status === 'done'
+                      ? 'concluída'
+                      : m.status === 'pending'
+                      ? 'análise'
+                      : m.points != null
+                      ? 'pts'
+                      : 'abrir'}
+                  </small>
                 </span>
 
                 <span className="lid">
@@ -344,13 +424,13 @@ export function Ranking({ rk }) {
   const top = [1, 0, 2].map((i) => rk.ranking[i]).filter(Boolean);
   return (
     <>
-      {!rk.ranking.length && <p className="m">Ninguém acumulou Ducks ainda. Seja a primeira pessoa!</p>}
+      {!rk.ranking.length && <p className="m">Ninguém pontuou ainda. Seja a primeira pessoa!</p>}
       <div className="podium">
         {top.map((r) => (
           <div key={r.position} className={`pod p${r.position}`}>
             <Avatar u={r} />
             <b className="uname">{r.name}</b>
-            <span>{r.points} Ducks</span>
+            <span>{r.points} pts</span>
             <div className="step" style={{ color: MEDAL_COLOR[r.position - 1] }}>
               <Icon name="medal" size={24} />
             </div>
@@ -362,7 +442,7 @@ export function Ranking({ rk }) {
           <span className="pos">{r.position}</span>
           <Avatar u={r} />
           <b className="uname">{r.name}</b>
-          <b className="pts">{r.points} Ducks</b>
+          <b className="pts">{r.points} pts</b>
         </div>
       ))}
       {rk.me && (
@@ -372,7 +452,7 @@ export function Ranking({ rk }) {
             <Icon name="star" size={16} />
           </span>
           <b>Você</b>
-          <b className="pts">{rk.me.points} Ducks</b>
+          <b className="pts">{rk.me.points} pts</b>
         </div>
       )}
     </>
@@ -462,9 +542,13 @@ export function Profile({ me, onLogout }) {
           <input type="file" accept="image/*" onChange={changeAvatar} hidden />
         </label>
         <div>
-          <b className="big uname">{me.user.name}</b>
+          <div className="who-name">
+            <b className="big uname">{me.user.name}</b>
+            <CommunityTag community={me.user.community} />
+          </div>
           <p className="m">
-            {me.points} Ducks · {me.missionsDone} missões
+            {me.missionsDone} de 25 missões concluídas
+            {me.points != null ? ` · ${me.points} pontos` : ''}
           </p>
           <div className="av-actions">
             <label className="link-btn">
@@ -516,7 +600,7 @@ export function MissionModal({ m, onSubmit }) {
       <div className="paper">
         <b>Objetivo:</b> {m.objective}
       </div>
-      <p className="gain">+{m.points} Ducks</p>
+      {m.points != null && <p className="gain">+{m.points} pontos</p>}
       {m.status === 'rejected' && <div className="err">Sua prova anterior foi recusada. Envie outra.</div>}
       {m.needsReview && !done && !pend && (
         <>
@@ -527,7 +611,7 @@ export function MissionModal({ m, onSubmit }) {
             onChange={(e) => setProof(e.target.value)}
             placeholder="Conte o que você fez ou cole o link da mensagem"
           />
-          <p className="m small">Um admin confere antes de os Ducks entrarem.</p>
+          <p className="m small">Um admin confere antes de validar a missão.</p>
         </>
       )}
       <div className="acts">

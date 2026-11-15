@@ -4,6 +4,8 @@ import { Tree, Snow, Burst } from './tree.jsx';
 import { Icon } from './icons.jsx';
 import {
   Avatar,
+  CommunityTag,
+  ChooseCommunity,
   Login,
   Home,
   Calendar,
@@ -191,6 +193,16 @@ export default function App() {
     });
   }, [load]);
 
+  // Aplica a paleta de cores da comunidade (Ducks ou The Kingdom) automaticamente
+  useEffect(() => {
+    const comm = me?.user?.community || '';
+    if (comm) {
+      document.documentElement.dataset.community = comm;
+    } else {
+      delete document.documentElement.dataset.community;
+    }
+  }, [me?.user?.community]);
+
   useEffect(() => {
     const f = (e) => e.key === 'Escape' && setModal(null);
     addEventListener('keydown', f);
@@ -217,11 +229,31 @@ export default function App() {
     ['perfil', 'user', 'Perfil'],
   ];
 
+  const selectCommunity = async (community) => {
+    try {
+      const res = await fetch('/api/me/community', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ community }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Erro ao vincular comunidade.');
+      say(`Tag ${community === 'kingdom' ? 'THE KINGDOM' : 'DUCKS'} vinculada ao seu perfil!`);
+      await load();
+    } catch (e) {
+      say(e.message);
+    }
+  };
+
   const complete = async (day, proof) => {
     try {
       const r = await api.complete(day, proof);
       if (r.status === 'pending') say('Enviado! Um admin vai conferir.');
-      else { say(`+${r.points} pontos!`); setBurst((b) => b + 1); }
+      else {
+        say(r.points != null ? `+${r.points} pontos!` : 'Missão concluída!');
+        setBurst((b) => b + 1);
+      }
       setModal(null);
       await load();
     } catch (e) { say(e.message); }
@@ -308,6 +340,7 @@ export default function App() {
   let view;
   if (me === undefined) view = <p className="m center pad">Acendendo as luzes…</p>;
   else if (!me) view = <Login erro={netErr || new URLSearchParams(location.search).get('erro')} />;
+  else if (!me.user.community) view = <ChooseCommunity onSelect={selectCommunity} />;
   else if (!ev) view = <p className="m center pad">Carregando…</p>;
   else {
     view =
@@ -344,7 +377,7 @@ export default function App() {
     <LetterModal l={modal.l} />;
 
   const showRightWidget =
-    me && ev && wide && canSeeRanking && rk && activeTab !== 'ranking' && activeTab !== 'premios';
+    me && me.user.community && ev && wide && canSeeRanking && rk && activeTab !== 'ranking' && activeTab !== 'premios';
 
   return (
     <>
@@ -417,7 +450,9 @@ export default function App() {
 
               <a href="#perfil" className="chip" title="Ver perfil">
                 <Avatar u={me.user} />
-                <span>{me.user.name} · {me.points} pts</span>
+                <span className="uname">{me.user.name}</span>
+                <CommunityTag community={me.user.community} />
+                {me.points != null && <span>· {me.points} pts</span>}
               </a>
             </header>
 

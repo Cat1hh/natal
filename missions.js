@@ -59,11 +59,9 @@ export const COMMUNITY_META = {
   ducks: {
     tag: 'DUCKS',
     name: 'Ducks',
-    currency: 'Ducks',
   },
   kingdom: {
     tag: 'THE KINGDOM',
     name: 'The Kingdom',
-    currency: 'Pontos', // troque pelo nome da moeda da Kingdom se houver
   },
 };

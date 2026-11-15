@@ -976,3 +976,224 @@ textarea { width: 100%; margin-top: 8px; padding: 12px; border-radius: 14px; bor
   background: rgba(244, 165, 29, 0.12);
   border: 1px solid rgba(244, 165, 29, 0.32);
 }
+/* Tags / Cargos de identificação de comunidade */
+.who-name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.comm-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font: 700 11px Quicksand, system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.comm-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.comm-tag.ducks {
+  color: #ffd573;
+  background: rgba(244, 165, 29, 0.16);
+  border: 1px solid rgba(244, 165, 29, 0.55);
+}
+.comm-tag.ducks .comm-dot {
+  background: #F4A51D;
+  box-shadow: 0 0 6px #F4A51D;
+}
+
+.comm-tag.kingdom {
+  color: #f5b8ba;
+  background: rgba(168, 30, 35, 0.34);
+  border: 1px solid rgba(224, 92, 97, 0.6);
+}
+.comm-tag.kingdom .comm-dot {
+  background: #e05c61;
+  box-shadow: 0 0 6px #e05c61;
+}
+
+/* Tela de escolha para membros nos dois servidores */
+.choose-comm {
+  max-width: 760px;
+  margin: 12px auto;
+}
+.comm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+.comm-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 18px;
+  border-radius: 18px;
+  text-align: left;
+  color: var(--cream);
+  background: rgba(241, 228, 212, 0.05);
+  border: 1px solid var(--line);
+  transition: transform 0.18s, border-color 0.2s, background 0.2s;
+}
+.comm-card h3 { margin: 4px 0 0; }
+.comm-card.ducks:hover {
+  transform: translateY(-3px);
+  border-color: var(--gold);
+  background: rgba(244, 165, 29, 0.12);
+}
+.comm-card.kingdom:hover {
+  transform: translateY(-3px);
+  border-color: var(--red2);
+  background: rgba(168, 30, 35, 0.22);
+}
+/* =========================================================
+   TEMA DA COMUNIDADE: DUCKS
+   Night #0C101C · Wind #214664 · Ice #3386B7 · Snowflake #7AABC3 · Miracle #E7B95A
+   ========================================================= */
+:root[data-community="ducks"] {
+  --bg: #0C101C;
+  --bg2: #131c2e;
+  --card: rgba(33, 70, 100, 0.38);
+  --cream: #eef6fa;
+  --muted: #7AABC3;
+  --line: rgba(122, 171, 195, 0.24);
+  --gold: #E7B95A;
+  --red: #3386B7;
+  --red2: #4a9fd1;
+  --pine: #214664;
+}
+
+:root[data-community="ducks"] body {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(51, 134, 183, 0.24), transparent 44%),
+    radial-gradient(circle at 84% 18%, rgba(231, 185, 90, 0.14), transparent 40%),
+    radial-gradient(circle at 50% 90%, rgba(33, 70, 100, 0.42), transparent 55%),
+    #0C101C;
+  color: #eef6fa;
+}
+
+/* Painéis de vidro */
+:root[data-community="ducks"] .glass {
+  background: linear-gradient(160deg, rgba(33, 70, 100, 0.44), rgba(12, 16, 28, 0.84));
+  border-color: rgba(122, 171, 195, 0.24);
+  box-shadow: 0 18px 44px rgba(5, 9, 18, 0.62);
+}
+
+:root[data-community="ducks"] .glass.hot {
+  border-color: rgba(122, 171, 195, 0.34);
+}
+
+/* Botões principais e estados */
+:root[data-community="ducks"] .btn {
+  background: linear-gradient(135deg, #3386B7, #214664);
+  color: #eef6fa;
+  border: 1px solid rgba(122, 171, 195, 0.35);
+}
+
+:root[data-community="ducks"] .btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #3e97cc, #29567a);
+  box-shadow: 0 8px 22px rgba(51, 134, 183, 0.34);
+}
+
+:root[data-community="ducks"] .btn.red {
+  background: linear-gradient(135deg, #E7B95A, #c99638);
+  color: #0C101C;
+  font-weight: 700;
+  border-color: rgba(231, 185, 90, 0.6);
+}
+
+:root[data-community="ducks"] .btn.red:hover:not(:disabled) {
+  background: linear-gradient(135deg, #f0c66d, #d6a242);
+  box-shadow: 0 8px 24px rgba(231, 185, 90, 0.32);
+}
+
+:root[data-community="ducks"] .btn.pine {
+  background: rgba(51, 134, 183, 0.24);
+  color: #7AABC3;
+  border-color: rgba(51, 134, 183, 0.5);
+}
+
+/* Textos de destaque e barra de progresso */
+:root[data-community="ducks"] .eyebrow,
+:root[data-community="ducks"] .gain {
+  color: #E7B95A;
+}
+
+:root[data-community="ducks"] .bar {
+  background: rgba(12, 16, 28, 0.75);
+  border: 1px solid rgba(122, 171, 195, 0.22);
+}
+
+:root[data-community="ducks"] .bar > i {
+  background: linear-gradient(90deg, #3386B7, #7AABC3, #E7B95A);
+}
+
+/* Cartinhas e papéis */
+:root[data-community="ducks"] .letter-card {
+  background: rgba(33, 70, 100, 0.36);
+  border-color: rgba(122, 171, 195, 0.28);
+}
+
+:root[data-community="ducks"] .letter-card:hover {
+  border-color: #E7B95A;
+  background: rgba(51, 134, 183, 0.28);
+}
+
+:root[data-community="ducks"] .letter-seal {
+  background: rgba(231, 185, 90, 0.18);
+  color: #E7B95A;
+}
+
+/* Calendário do Advento na paleta Ducks */
+:root[data-community="ducks"] .advent-board {
+  background: rgba(12, 16, 28, 0.72);
+  border-color: rgba(122, 171, 195, 0.28);
+}
+
+:root[data-community="ducks"] .adv-door .in {
+  background: #0C101C;
+  color: #eef6fa;
+  border-color: rgba(122, 171, 195, 0.28);
+}
+
+:root[data-community="ducks"] .adv-door.t-dark-stars .lid,
+:root[data-community="ducks"] .adv-door.t-dark-dots .lid,
+:root[data-community="ducks"] .adv-door.t-dark-stripes .lid,
+:root[data-community="ducks"] .adv-door.t-dark-triangles .lid {
+  background-color: #214664;
+  border-color: rgba(122, 171, 195, 0.32);
+}
+
+:root[data-community="ducks"] .adv-door.t-gold .lid {
+  background: linear-gradient(135deg, #E7B95A, #cfa042);
+  color: #0C101C;
+}
+
+:root[data-community="ducks"] .adv-door.t-cream .lid,
+:root[data-community="ducks"] .adv-door.t-cream-stripes .lid {
+  background-color: #7AABC3;
+  color: #0C101C;
+}
+
+/* Tag / Cargo de identificação DUCKS */
+.comm-tag.ducks {
+  color: #E7B95A;
+  background: rgba(33, 70, 100, 0.65);
+  border: 1px solid rgba(122, 171, 195, 0.55);
+}
+.comm-tag.ducks .comm-dot {
+  background: #E7B95A;
+  box-shadow: 0 0 7px #E7B95A;
+}
