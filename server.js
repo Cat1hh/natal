@@ -8,7 +8,17 @@ import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import supabase from './db.js';
-import { MISSIONS, MISSIONS_BY_COMMUNITY, COMMUNITY_META, PRIZES, MILESTONES } from './missions.js';
+import * as missionsMod from './missions.js';
+
+const { MISSIONS, PRIZES, MILESTONES } = missionsMod;
+const MISSIONS_BY_COMMUNITY = missionsMod.MISSIONS_BY_COMMUNITY || {
+  ducks: MISSIONS,
+  kingdom: MISSIONS,
+};
+const COMMUNITY_META = missionsMod.COMMUNITY_META || {
+  ducks: { tag: 'DUCKS', name: 'Ducks', currency: 'Ducks' },
+  kingdom: { tag: 'THE KINGDOM', name: 'The Kingdom', currency: 'Pontos' },
+};
 
 const {
   PORT = 3000,
@@ -43,6 +53,7 @@ function getMissionsFor(community) {
   return MISSIONS_BY_COMMUNITY[community] || MISSIONS;
 }
 
+/* ---------- Dia do evento e liberação do final (26/12) ---------- */
 function eventState() {
   const dbg = parseInt(DEBUG_DAY, 10);
   if (!PROD && dbg >= 1 && dbg <= 25) return { status: 'live', today: dbg, finale: false };
@@ -53,6 +64,7 @@ function eventState() {
   return { status: 'live', today: diff + 1, finale: false };
 }
 
+/* ---------- Helpers do banco (Supabase) ---------- */
 async function getUserStats(uid) {
   const { data } = await supabase.from('completions').select('points').eq('user_id', uid);
   const rows = data || [];
@@ -81,6 +93,7 @@ async function giveCompletion(uid, day, community) {
 const avatarUrl = (u) =>
   u?.avatar ? `https://cdn.discordapp.com/avatars/${u.discord_id}/${u.avatar}.png?size=128` : null;
 
+/* Verificações automáticas de missão */
 const checks = {
   login: async () => true,
   discord: async () => true,
@@ -104,6 +117,7 @@ const checkMsg = {
   count10: 'Conclua 10 missões antes desta.',
 };
 
+/* ---------- App e segurança ---------- */
 const app = express();
 if (TRUST_PROXY || VERCEL) app.set('trust proxy', Number(TRUST_PROXY) || 1);
 
@@ -125,6 +139,7 @@ app.use(
 app.use(express.json({ limit: '4mb' }));
 app.use(cookieParser());
 
+// Proteção CSRF compatível com Vite local e Vercel
 app.use((req, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   const origin = req.get('origin');
@@ -135,6 +150,7 @@ app.use((req, res, next) => {
   return res.status(403).json({ error: 'origem_invalida' });
 });
 
+// Carrega o usuário da sessão
 app.use(
   run(async (req, res, next) => {
     const sid = req.cookies.sid;
@@ -168,7 +184,7 @@ app.use('/api', (req, res, next) =>
   req.path === '/me' || req.user ? next() : res.status(401).json({ error: 'nao_autenticado' })
 );
 
-/* ---------- Login com Discord + Verificação de Servidor ---------- */
+/* ---------- Login com Discord (OAuth2 + Detecção de Servidor) ---------- */
 app.get('/auth/discord', (req, res) => {
   const state = randomBytes(16).toString('hex');
   const redirectUri = `${getBaseUrl(req)}/auth/discord/callback`;
@@ -211,7 +227,8 @@ app.get(
         fetch('https://discord.com/api/users/@me', { headers: { Authorization: `Bearer ${access_token}` } }),
         fetch('https://discord.com/api/users/@me/guilds', { headers: { Authorization: `Bearer ${access_token}` } }),
       ]);
-      if (!meRes.ok || !guildsRes.ok) throw new Error('falha ao consultar usuario/servidores no Discord');
+      if (!meRes.ok) throw new Error(`users/@me ${meRes.status}`);
+      if (!guildsRes.ok) throw new Error(`users/@me/guilds ${guildsRes.status}`);
 
       const d = await meRes.json();
       const guilds = await guildsRes.json();
@@ -232,12 +249,12 @@ app.get(
         .eq('discord_id', d.id)
         .maybeSingle();
 
-      // Mantém a tag travada se já escolheu; caso contrário atribui pelo servidor
+      // Mantém a tag travada se já estiver definida; senão atribui automaticamente pelo servidor
       let community = existing?.community || null;
       if (!community) {
         if (inDucks && !inKingdom) community = 'ducks';
         else if (inKingdom && !inDucks) community = 'kingdom';
-        // Se estiver nos dois servidores, community fica null até escolher na tela inicial
+        // Se estiver nos dois servidores, community fica null até escolher no site
       }
 
       const { data: user, error: uErr } = await supabase
@@ -306,7 +323,7 @@ app.get(
   })
 );
 
-// Usado quando o membro está nos dois servidores e escolhe em qual evento competir
+// Define a tag/cargo caso o usuário esteja nos dois servidores (ou para admin alternar)
 app.post(
   '/api/me/community',
   requireAuth,
@@ -327,19 +344,20 @@ app.post(
 /* ---------- Evento e missões (separados por comunidade) ---------- */
 app.get(
   '/api/event',
-  requireCommunity,
   run(async (req, res) => {
     const ev = eventState();
-    const community = req.user.community;
+    const community = req.user?.community;
+    if (!community) {
+      return res.json({ status: ev.status, today: ev.today, finale: ev.finale, start: EVENT_START, community: null, missions: [] });
+    }
+
     const list = getMissionsFor(community);
     const subs = new Map();
-    let done = new Set();
-
     const [doneDays, { data: subRows }] = await Promise.all([
       getDoneDays(req.user.id),
       supabase.from('submissions').select('day, status').eq('user_id', req.user.id),
     ]);
-    done = new Set(doneDays);
+    const done = new Set(doneDays);
     (subRows || []).forEach((s) => subs.set(s.day, s.status));
 
     const missions = list.map(([title, objective, points, verify], i) => {
@@ -413,7 +431,7 @@ app.post(
   })
 );
 
-/* ---------- Ranking isolado por comunidade ---------- */
+/* ---------- Ranking e prêmios (isolados por comunidade) ---------- */
 app.get(
   '/api/ranking',
   requireAuth,
@@ -475,17 +493,19 @@ app.get('/api/prizes', requireAuth, (req, res) => {
   res.json({ prizes: PRIZES, milestones: MILESTONES });
 });
 
-/* ---------- Árvore de cartinhas isolada por comunidade ---------- */
+/* ---------- Árvore de cartinhas (isolada por comunidade) ---------- */
 app.get(
   '/api/letters',
-  requireCommunity,
   run(async (req, res) => {
+    const community = req.user?.community;
+    if (!community) return res.json({ letters: [] });
+
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 12, 1), 60);
     const { data } = await supabase
       .from('letters')
       .select('id, author, text, created_at')
       .eq('hidden', false)
-      .eq('community', req.user.community)
+      .eq('community', community)
       .order('id', { ascending: false })
       .limit(limit);
 
@@ -559,13 +579,14 @@ app.post(
   })
 );
 
-/* ---------- Galeria isolada por comunidade ---------- */
+/* ---------- Galeria de Artes (isolada por comunidade) ---------- */
 app.get(
   '/api/gallery',
   requireAuth,
-  requireCommunity,
   run(async (req, res) => {
-    const community = req.user.community;
+    const community = req.user?.community;
+    if (!community) return res.json({ items: [] });
+
     let query = supabase
       .from('gallery')
       .select('id, user_id, author_name, title, message, image_url, status, created_at')
@@ -662,7 +683,7 @@ app.patch(
   })
 );
 
-/* ---------- Admin ---------- */
+/* ---------- Admin (Missões e Cartinhas) ---------- */
 app.get(
   '/api/admin/submissions',
   requireAuth,
