@@ -49,3 +49,21 @@ export const MILESTONES = [
   { missions: 15, title: 'Emoji exclusivo', reward: 'para o servidor' },
   { missions: 25, title: 'Natal Completo', reward: 'moldura de perfil' },
 ];
+// No final do seu missions.js, adicione:
+export const MISSIONS_BY_COMMUNITY = {
+  ducks: MISSIONS,   // depois substituímos pelos desafios exclusivos da Ducks
+  kingdom: MISSIONS, // depois substituímos pelos desafios exclusivos da The Kingdom
+};
+
+export const COMMUNITY_META = {
+  ducks: {
+    tag: 'DUCKS',
+    name: 'Ducks',
+    currency: 'Ducks',
+  },
+  kingdom: {
+    tag: 'THE KINGDOM',
+    name: 'The Kingdom',
+    currency: 'Pontos', // troque pelo nome da moeda da Kingdom se houver
+  },
+};

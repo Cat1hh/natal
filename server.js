@@ -8,7 +8,7 @@ import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import supabase from './db.js';
-import { MISSIONS, PRIZES, MILESTONES } from './missions.js';
+import { MISSIONS, MISSIONS_BY_COMMUNITY, COMMUNITY_META, PRIZES, MILESTONES } from './missions.js';
 
 const {
   PORT = 3000,
@@ -18,6 +18,8 @@ const {
   NODE_ENV = VERCEL ? 'production' : 'development',
   DISCORD_CLIENT_ID,
   DISCORD_CLIENT_SECRET,
+  DUCKS_GUILD_ID = '1472932028721664148',
+  KINGDOM_GUILD_ID = '992981876664971306',
   ADMIN_IDS = '',
   EVENT_START = '2026-12-01',
   DEBUG_DAY,
@@ -37,7 +39,10 @@ function getBaseUrl(req) {
   return host ? `${proto}://${host}` : BASE_URL.replace(/\/$/, '');
 }
 
-/* ---------- Dia do evento e liberação do final (26/12) ---------- */
+function getMissionsFor(community) {
+  return MISSIONS_BY_COMMUNITY[community] || MISSIONS;
+}
+
 function eventState() {
   const dbg = parseInt(DEBUG_DAY, 10);
   if (!PROD && dbg >= 1 && dbg <= 25) return { status: 'live', today: dbg, finale: false };
@@ -48,7 +53,6 @@ function eventState() {
   return { status: 'live', today: diff + 1, finale: false };
 }
 
-/* ---------- Helpers do banco (Supabase) ---------- */
 async function getUserStats(uid) {
   const { data } = await supabase.from('completions').select('points').eq('user_id', uid);
   const rows = data || [];
@@ -63,8 +67,9 @@ async function getDoneDays(uid) {
   return (data || []).map((r) => r.day);
 }
 
-async function giveCompletion(uid, day) {
-  const pts = MISSIONS[day - 1][2];
+async function giveCompletion(uid, day, community) {
+  const list = getMissionsFor(community);
+  const pts = list[day - 1][2];
   const { data, error } = await supabase
     .from('completions')
     .upsert({ user_id: uid, day, points: pts }, { onConflict: 'user_id,day', ignoreDuplicates: true })
@@ -76,7 +81,6 @@ async function giveCompletion(uid, day) {
 const avatarUrl = (u) =>
   u?.avatar ? `https://cdn.discordapp.com/avatars/${u.discord_id}/${u.avatar}.png?size=128` : null;
 
-/* Verificações automáticas de missão */
 const checks = {
   login: async () => true,
   discord: async () => true,
@@ -100,7 +104,6 @@ const checkMsg = {
   count10: 'Conclua 10 missões antes desta.',
 };
 
-/* ---------- App e segurança ---------- */
 const app = express();
 if (TRUST_PROXY || VERCEL) app.set('trust proxy', Number(TRUST_PROXY) || 1);
 
@@ -122,19 +125,16 @@ app.use(
 app.use(express.json({ limit: '4mb' }));
 app.use(cookieParser());
 
-// Proteção CSRF compatível com Vite local e Vercel
 app.use((req, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   const origin = req.get('origin');
   if (!origin) return next();
   const currentOrigin = new URL(getBaseUrl(req)).origin;
-  const allowed = new Set([currentOrigin]);
-  if (!PROD) allowed.add('http://localhost:5173');
-  if (!allowed.has(origin)) return res.status(403).json({ error: 'origem_invalida' });
-  next();
+  if (origin === currentOrigin) return next();
+  if (!PROD && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return next();
+  return res.status(403).json({ error: 'origem_invalida' });
 });
 
-// Carrega o usuário da sessão
 app.use(
   run(async (req, res, next) => {
     const sid = req.cookies.sid;
@@ -161,12 +161,14 @@ const strict = rateLimit({ ...limits, windowMs: 60_000, limit: 15, message: { er
 
 const requireAuth = (req, res, next) => (req.user ? next() : res.status(401).json({ error: 'nao_autenticado' }));
 const requireAdmin = (req, res, next) => (req.user?.isAdmin ? next() : res.status(403).json({ error: 'sem_permissao' }));
+const requireCommunity = (req, res, next) =>
+  req.user?.community ? next() : res.status(403).json({ error: 'comunidade_nao_definida' });
 
 app.use('/api', (req, res, next) =>
   req.path === '/me' || req.user ? next() : res.status(401).json({ error: 'nao_autenticado' })
 );
 
-/* ---------- Login com Discord (OAuth2) ---------- */
+/* ---------- Login com Discord + Verificação de Servidor ---------- */
 app.get('/auth/discord', (req, res) => {
   const state = randomBytes(16).toString('hex');
   const redirectUri = `${getBaseUrl(req)}/auth/discord/callback`;
@@ -175,7 +177,7 @@ app.get('/auth/discord', (req, res) => {
     client_id: DISCORD_CLIENT_ID ?? '',
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: 'identify',
+    scope: 'identify guilds',
     state,
   });
   res.redirect(`https://discord.com/oauth2/authorize?${params}`);
@@ -205,16 +207,48 @@ app.get(
       if (!tokenRes.ok) throw new Error(`token ${tokenRes.status}`);
       const { access_token } = await tokenRes.json();
 
-      const meRes = await fetch('https://discord.com/api/users/@me', {
-        headers: { Authorization: `Bearer ${access_token}` },
-      });
-      if (!meRes.ok) throw new Error(`users/@me ${meRes.status}`);
+      const [meRes, guildsRes] = await Promise.all([
+        fetch('https://discord.com/api/users/@me', { headers: { Authorization: `Bearer ${access_token}` } }),
+        fetch('https://discord.com/api/users/@me/guilds', { headers: { Authorization: `Bearer ${access_token}` } }),
+      ]);
+      if (!meRes.ok || !guildsRes.ok) throw new Error('falha ao consultar usuario/servidores no Discord');
+
       const d = await meRes.json();
+      const guilds = await guildsRes.json();
+      const guildIds = new Set((guilds || []).map((g) => g.id));
+
+      const inDucks = guildIds.has(DUCKS_GUILD_ID);
+      const inKingdom = guildIds.has(KINGDOM_GUILD_ID);
+      const isAdmin = ADMINS.has(d.id);
+
+      // Bloqueia quem não participa de nenhum dos dois servidores (exceto admins)
+      if (!inDucks && !inKingdom && !isAdmin) {
+        return res.redirect('/?erro=sem_servidor');
+      }
+
+      const { data: existing } = await supabase
+        .from('users')
+        .select('id, community')
+        .eq('discord_id', d.id)
+        .maybeSingle();
+
+      // Mantém a tag travada se já escolheu; caso contrário atribui pelo servidor
+      let community = existing?.community || null;
+      if (!community) {
+        if (inDucks && !inKingdom) community = 'ducks';
+        else if (inKingdom && !inDucks) community = 'kingdom';
+        // Se estiver nos dois servidores, community fica null até escolher na tela inicial
+      }
 
       const { data: user, error: uErr } = await supabase
         .from('users')
         .upsert(
-          { discord_id: d.id, username: d.global_name || d.username, avatar: d.avatar },
+          {
+            discord_id: d.id,
+            username: d.global_name || d.username,
+            avatar: d.avatar,
+            community,
+          },
           { onConflict: 'discord_id' }
         )
         .select('id')
@@ -246,12 +280,13 @@ app.post(
   })
 );
 
-/* ---------- Perfil ---------- */
+/* ---------- Perfil e Escolha/Tag de Comunidade ---------- */
 app.get(
   '/api/me',
   run(async (req, res) => {
     if (!req.user) return res.json({ user: null });
     const [s, done] = await Promise.all([getUserStats(req.user.id), getDoneDays(req.user.id)]);
+    const meta = COMMUNITY_META[req.user.community] || null;
     res.json({
       user: {
         id: req.user.id,
@@ -259,6 +294,10 @@ app.get(
         avatar: avatarUrl(req.user),
         discord: { connected: true, id: req.user.discord_id },
         isAdmin: req.user.isAdmin,
+        community: req.user.community,
+        tag: meta?.tag || null,
+        communityName: meta?.name || null,
+        currency: meta?.currency || 'Ducks',
       },
       points: s.points,
       missionsDone: s.missions,
@@ -267,24 +306,43 @@ app.get(
   })
 );
 
-/* ---------- Evento e missões ---------- */
+// Usado quando o membro está nos dois servidores e escolhe em qual evento competir
+app.post(
+  '/api/me/community',
+  requireAuth,
+  run(async (req, res) => {
+    const choice = req.body?.community;
+    if (!['ducks', 'kingdom'].includes(choice)) {
+      return res.status(400).json({ error: 'comunidade_invalida' });
+    }
+    if (req.user.community && !req.user.isAdmin) {
+      return res.status(409).json({ error: 'tag_ja_definida', message: 'Sua tag de evento já está travada.' });
+    }
+    const { error } = await supabase.from('users').update({ community: choice }).eq('id', req.user.id);
+    if (error) throw error;
+    res.json({ ok: true, community: choice });
+  })
+);
+
+/* ---------- Evento e missões (separados por comunidade) ---------- */
 app.get(
   '/api/event',
+  requireCommunity,
   run(async (req, res) => {
     const ev = eventState();
+    const community = req.user.community;
+    const list = getMissionsFor(community);
     const subs = new Map();
     let done = new Set();
 
-    if (req.user) {
-      const [doneDays, { data: subRows }] = await Promise.all([
-        getDoneDays(req.user.id),
-        supabase.from('submissions').select('day, status').eq('user_id', req.user.id),
-      ]);
-      done = new Set(doneDays);
-      (subRows || []).forEach((s) => subs.set(s.day, s.status));
-    }
+    const [doneDays, { data: subRows }] = await Promise.all([
+      getDoneDays(req.user.id),
+      supabase.from('submissions').select('day, status').eq('user_id', req.user.id),
+    ]);
+    done = new Set(doneDays);
+    (subRows || []).forEach((s) => subs.set(s.day, s.status));
 
-    const missions = MISSIONS.map(([title, objective, points, verify], i) => {
+    const missions = list.map(([title, objective, points, verify], i) => {
       const day = i + 1;
       let status;
       if (done.has(day)) status = 'done';
@@ -295,7 +353,7 @@ app.get(
       return { day, title, objective, points, status, needsReview: verify === 'review' };
     });
 
-    res.json({ status: ev.status, today: ev.today, finale: ev.finale, start: EVENT_START, missions });
+    res.json({ status: ev.status, today: ev.today, finale: ev.finale, start: EVENT_START, community, missions });
   })
 );
 
@@ -303,9 +361,11 @@ app.post(
   '/api/missions/:day/complete',
   strict,
   requireAuth,
+  requireCommunity,
   run(async (req, res) => {
     const day = parseInt(req.params.day, 10);
-    const m = MISSIONS[day - 1];
+    const list = getMissionsFor(req.user.community);
+    const m = list[day - 1];
     if (!m) return res.status(404).json({ error: 'missao_inexistente' });
 
     const ev = eventState();
@@ -347,25 +407,28 @@ app.post(
     if (!(await checks[verify](uid))) {
       return res.status(400).json({ error: 'requisito_pendente', message: checkMsg[verify] });
     }
-    const points = await giveCompletion(uid, day);
+    const points = await giveCompletion(uid, day, req.user.community);
     const stats = await getUserStats(uid);
     res.json({ status: 'done', points, total: stats.points });
   })
 );
 
-/* ---------- Ranking e prêmios ---------- */
+/* ---------- Ranking isolado por comunidade ---------- */
 app.get(
   '/api/ranking',
   requireAuth,
+  requireCommunity,
   run(async (req, res) => {
     const ev = eventState();
     if (!req.user.isAdmin && !ev.finale) {
       return res.status(403).json({ error: 'ranking_oculto', message: 'O ranking será revelado no dia 26!' });
     }
 
+    const community = req.user.community;
     const { data: rows } = await supabase
       .from('completions')
-      .select('user_id, points, created_at, users(username, discord_id, avatar)');
+      .select('user_id, points, created_at, users!inner(username, discord_id, avatar, community)')
+      .eq('users.community', community);
 
     const map = new Map();
     for (const r of rows || []) {
@@ -375,6 +438,7 @@ app.get(
         name: r.users.username,
         discord_id: r.users.discord_id,
         avatar: r.users.avatar,
+        community: r.users.community,
         total: 0,
         missions: 0,
         last: r.created_at,
@@ -390,6 +454,7 @@ app.get(
       position: i + 1,
       name: r.name,
       avatar: avatarUrl(r),
+      tag: COMMUNITY_META[r.community]?.tag,
       points: r.total,
       missions: r.missions,
     }));
@@ -398,7 +463,7 @@ app.get(
     const s = await getUserStats(req.user.id);
     const me = { points: s.points, missions: s.missions, position: idx >= 0 ? idx + 1 : null };
 
-    res.json({ ranking, me });
+    res.json({ ranking, me, community });
   })
 );
 
@@ -410,15 +475,17 @@ app.get('/api/prizes', requireAuth, (req, res) => {
   res.json({ prizes: PRIZES, milestones: MILESTONES });
 });
 
-/* ---------- Árvore de cartinhas ---------- */
+/* ---------- Árvore de cartinhas isolada por comunidade ---------- */
 app.get(
   '/api/letters',
+  requireCommunity,
   run(async (req, res) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 12, 1), 60);
     const { data } = await supabase
       .from('letters')
       .select('id, author, text, created_at')
       .eq('hidden', false)
+      .eq('community', req.user.community)
       .order('id', { ascending: false })
       .limit(limit);
 
@@ -434,6 +501,7 @@ app.post(
   '/api/letters',
   strict,
   requireAuth,
+  requireCommunity,
   run(async (req, res) => {
     const text = String(req.body?.text ?? '')
       .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
@@ -456,7 +524,7 @@ app.post(
     const author = req.body?.anonymous ? 'Anônimo' : req.user.username;
     const { data: created, error } = await supabase
       .from('letters')
-      .insert({ user_id: req.user.id, author, text })
+      .insert({ user_id: req.user.id, author, text, community: req.user.community })
       .select('id, author, text')
       .single();
     if (error) throw error;
@@ -491,14 +559,17 @@ app.post(
   })
 );
 
-/* ---------- Galeria de Artes ---------- */
+/* ---------- Galeria isolada por comunidade ---------- */
 app.get(
   '/api/gallery',
   requireAuth,
+  requireCommunity,
   run(async (req, res) => {
+    const community = req.user.community;
     let query = supabase
       .from('gallery')
       .select('id, user_id, author_name, title, message, image_url, status, created_at')
+      .eq('community', community)
       .order('id', { ascending: false })
       .limit(100);
 
@@ -529,6 +600,7 @@ app.post(
   '/api/gallery',
   strict,
   requireAuth,
+  requireCommunity,
   run(async (req, res) => {
     const title = String(req.body?.title ?? '').trim().slice(0, 80);
     const message = String(req.body?.message ?? '').trim().slice(0, 300);
@@ -545,7 +617,7 @@ app.post(
     const contentType = match[1];
     const ext = contentType.split('/')[1] === 'jpeg' ? 'jpg' : contentType.split('/')[1];
     const buffer = Buffer.from(match[2], 'base64');
-    const filePath = `${req.user.id}/${Date.now()}-${randomBytes(4).toString('hex')}.${ext}`;
+    const filePath = `${req.user.community}/${req.user.id}/${Date.now()}-${randomBytes(4).toString('hex')}.${ext}`;
 
     const { error: upErr } = await supabase.storage
       .from('gallery')
@@ -564,6 +636,7 @@ app.post(
         message,
         image_url: pub.publicUrl,
         status: 'pending',
+        community: req.user.community,
       })
       .select('id, status')
       .single();
@@ -589,7 +662,7 @@ app.patch(
   })
 );
 
-/* ---------- Admin (Missões e Cartinhas) ---------- */
+/* ---------- Admin ---------- */
 app.get(
   '/api/admin/submissions',
   requireAuth,
@@ -598,7 +671,7 @@ app.get(
     const status = req.query.status === 'rejected' ? 'rejected' : 'pending';
     const { data } = await supabase
       .from('submissions')
-      .select('id, day, proof, status, created_at, users(username, discord_id)')
+      .select('id, day, proof, status, created_at, users(username, discord_id, community)')
       .eq('status', status)
       .order('id')
       .limit(100);
@@ -611,6 +684,7 @@ app.get(
       created_at: s.created_at,
       username: s.users?.username,
       discord_id: s.users?.discord_id,
+      community: s.users?.community,
     }));
     res.json({ submissions });
   })
@@ -625,14 +699,18 @@ app.post(
     if (!['approve', 'reject'].includes(action)) return res.status(404).json({ error: 'acao_invalida' });
     const id = parseInt(req.params.id, 10);
 
-    const { data: s } = await supabase.from('submissions').select('*').eq('id', id).maybeSingle();
+    const { data: s } = await supabase
+      .from('submissions')
+      .select('*, users(community)')
+      .eq('id', id)
+      .maybeSingle();
     if (!s || s.status !== 'pending') return res.status(404).json({ error: 'nao_encontrada' });
 
     await supabase
       .from('submissions')
       .update({ status: action === 'approve' ? 'approved' : 'rejected' })
       .eq('id', s.id);
-    if (action === 'approve') await giveCompletion(s.user_id, s.day);
+    if (action === 'approve') await giveCompletion(s.user_id, s.day, s.users?.community || 'ducks');
     res.json({ ok: true });
   })
 );
