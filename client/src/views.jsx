@@ -668,12 +668,25 @@ export function GalleryModal({ onSubmit }) {
   const [file, setFile] = useState(null);
   const [sending, setSending] = useState(false);
 
-  const handleFile = (e) => {
+const handleFile = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
     setFile(f);
+
     const reader = new FileReader();
-    reader.onload = () => setPreview(String(reader.result || ''));
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 1280;
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        setPreview(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = String(reader.result || '');
+    };
     reader.readAsDataURL(f);
   };
 

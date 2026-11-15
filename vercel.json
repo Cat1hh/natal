@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "buildCommand": "npm install && npm --prefix client install && npm --prefix client run build",
+  "outputDirectory": "public",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.js" },
+    { "source": "/auth/(.*)", "destination": "/api/index.js" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

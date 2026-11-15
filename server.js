@@ -95,7 +95,7 @@ app.use(
     },
   })
 );
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({ limit: '4mb' }));
 app.use(cookieParser());
 
 // Bloqueia requisições que mudam dados vindas de outros sites (CSRF)
