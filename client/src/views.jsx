@@ -136,25 +136,30 @@ function TileArt({ type }) {
   }
 }
 
-export const Avatar = ({ u, big }) =>
-  u?.avatar ? (
-    <img className={`av ${big ? 'xl' : ''}`} src={u.avatar} alt="" />
+export const Avatar = ({ u, big }) => {
+  const custom = typeof window !== 'undefined' && u?.id ? localStorage.getItem(`avatar_${u.id}`) : null;
+  const src = custom || u?.avatar;
+  return src ? (
+    <img className={`av ${big ? 'xl' : ''}`} src={src} alt="" />
   ) : (
     <span className={`av ${big ? 'xl' : ''}`}>
       <Icon name="user" size={big ? 30 : 18} />
     </span>
   );
+};
 
 /* ---------- Login ---------- */
 export function Login({ erro }) {
   return (
     <section className="glass hot login">
-      <Tree letters={Array(7).fill({})} />
-      <div>
+      <div className="login-tree">
+        <Tree letters={Array(7).fill({})} />
+      </div>
+      <div className="login-copy">
         <p className="eyebrow">25 dias · missões · prêmios</p>
         <h1>Entre para acender a sua luz</h1>
         <p className="m">
-          Faça login com o Discord para participar das missões, subir no ranking e deixar cartinhas na árvore.
+          Faça login com o Discord para participar das missões, acumular Ducks e deixar cartinhas na árvore.
         </p>
         {erro && (
           <div className="err">
@@ -190,20 +195,25 @@ export function Home({ me, ev, letters, onOpen, onWrite, onMission }) {
     <div className="home">
       <section className="glass hot">
         <h2>A Árvore das Cartinhas</h2>
-        <p className="m">Pendure uma mensagem para alguém que precisa ler. Toque num envelope ou nick para abrir.</p>
+        <p className="m">Pendure uma mensagem para alguém que precisa ler. Toque num envelope na árvore para abrir.</p>
         <Tree letters={letters} onOpen={onOpen} />
 
         {letters.length > 0 && (
-          <div className="letter-tags">
-            {letters.slice(0, 8).map((l, idx) => (
+          <div className="letter-cards">
+            {letters.slice(0, 6).map((l, idx) => (
               <button
                 key={l.id ?? idx}
                 type="button"
-                className="letter-pill"
+                className="letter-card"
                 onClick={() => onOpen?.(l)}
               >
-                <Icon name="mail" size={13} />
-                <span>{l.author || 'Anônimo'}</span>
+                <span className="letter-seal">
+                  <Icon name="mail" size={14} />
+                </span>
+                <span className="letter-meta">
+                  <b className="uname">{l.author || 'Anônimo'}</b>
+                  <small>Toque para ler</small>
+                </span>
               </button>
             ))}
           </div>
@@ -237,14 +247,14 @@ export function Home({ me, ev, letters, onOpen, onWrite, onMission }) {
             <small>de 25</small>
           </div>
         </div>
-        <p className="m center">{me.points} pontos acumulados</p>
+        <p className="m center">{me.points} Ducks acumulados</p>
         {m && (
           <>
             <h3>
               Dia {m.day} · {m.title}
             </h3>
             <p className="m">{m.objective}</p>
-            <p className="gain">+{m.points} pontos</p>
+            <p className="gain">+{m.points} Ducks</p>
             <button
               className={`btn ${m.status === 'done' ? 'pine' : m.status === 'pending' ? 'bronze' : ''}`}
               disabled={m.status === 'locked'}
@@ -276,9 +286,12 @@ export function Home({ me, ev, letters, onOpen, onWrite, onMission }) {
 /* ---------- Calendário do Advento (Mosaico) ---------- */
 export function Calendar({ ev, onMission }) {
   return (
-    <section className="glass hot">
-      <h2>Dezembro 2026 · Calendário Mágico</h2>
-      <p className="m">Uma porta nova se abre a cada dia. Passe o mouse ou toque para espiar a missão.</p>
+    <section className="glass hot cal-sec">
+      <div className="cal-head">
+        <p className="eyebrow">Dezembro 2026</p>
+        <h2>Calendário Mágico</h2>
+        <p className="m">Uma porta nova se abre a cada dia. Passe o mouse ou toque para espiar a missão.</p>
+      </div>
 
       <div className="advent-board">
         <div className="advent-grid">
@@ -310,7 +323,7 @@ export function Calendar({ ev, onMission }) {
                   <b className="big">
                     {m.status === 'done' ? <Icon name="star" size={20} /> : `+${m.points}`}
                   </b>
-                  <small>{m.status === 'done' ? 'concluída' : m.status === 'pending' ? 'análise' : 'pts'}</small>
+                  <small>{m.status === 'done' ? 'concluída' : m.status === 'pending' ? 'análise' : 'Ducks'}</small>
                 </span>
 
                 <span className="lid">
@@ -331,13 +344,13 @@ export function Ranking({ rk }) {
   const top = [1, 0, 2].map((i) => rk.ranking[i]).filter(Boolean);
   return (
     <>
-      {!rk.ranking.length && <p className="m">Ninguém pontuou ainda. Seja a primeira pessoa!</p>}
+      {!rk.ranking.length && <p className="m">Ninguém acumulou Ducks ainda. Seja a primeira pessoa!</p>}
       <div className="podium">
         {top.map((r) => (
           <div key={r.position} className={`pod p${r.position}`}>
             <Avatar u={r} />
-            <b>{r.name}</b>
-            <span>{r.points} pts</span>
+            <b className="uname">{r.name}</b>
+            <span>{r.points} Ducks</span>
             <div className="step" style={{ color: MEDAL_COLOR[r.position - 1] }}>
               <Icon name="medal" size={24} />
             </div>
@@ -348,8 +361,8 @@ export function Ranking({ rk }) {
         <div key={r.position} className="row">
           <span className="pos">{r.position}</span>
           <Avatar u={r} />
-          <b>{r.name}</b>
-          <b className="pts">{r.points} pts</b>
+          <b className="uname">{r.name}</b>
+          <b className="pts">{r.points} Ducks</b>
         </div>
       ))}
       {rk.me && (
@@ -359,7 +372,7 @@ export function Ranking({ rk }) {
             <Icon name="star" size={16} />
           </span>
           <b>Você</b>
-          <b className="pts">{rk.me.points} pts</b>
+          <b className="pts">{rk.me.points} Ducks</b>
         </div>
       )}
     </>
@@ -403,18 +416,67 @@ export function Prizes({ pz, done }) {
 }
 
 /* ---------- Perfil ---------- */
-export function Profile({ me, rk, onLogout }) {
-  const pos = rk?.me?.position;
+export function Profile({ me, onLogout }) {
+  const [, setTick] = useState(0);
+  const storageKey = me?.user?.id ? `avatar_${me.user.id}` : null;
+  const hasCustom = Boolean(storageKey && localStorage.getItem(storageKey));
+
+  const changeAvatar = (e) => {
+    const f = e.target.files?.[0];
+    if (!f || !storageKey) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const size = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const minSide = Math.min(img.width, img.height);
+        const sx = (img.width - minSide) / 2;
+        const sy = (img.height - minSide) / 2;
+        canvas.getContext('2d').drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+        localStorage.setItem(storageKey, canvas.toDataURL('image/jpeg', 0.85));
+        setTick((n) => n + 1);
+      };
+      img.src = String(reader.result || '');
+    };
+    reader.readAsDataURL(f);
+  };
+
+  const resetAvatar = () => {
+    if (!storageKey) return;
+    localStorage.removeItem(storageKey);
+    setTick((n) => n + 1);
+  };
+
   return (
     <section className="glass hot">
       <h2>Seu perfil</h2>
       <div className="who">
-        <Avatar u={me.user} big />
+        <label className="av-edit" title="Trocar foto de perfil">
+          <Avatar u={me.user} big />
+          <span className="av-badge">
+            <Icon name="camera" size={13} />
+          </span>
+          <input type="file" accept="image/*" onChange={changeAvatar} hidden />
+        </label>
         <div>
-          <b className="big">{me.user.name}</b>
+          <b className="big uname">{me.user.name}</b>
           <p className="m">
-            {me.points} pontos · {me.missionsDone} missões · {pos ? `#${pos} no ranking` : 'sem posição ainda'}
+            {me.points} Ducks · {me.missionsDone} missões
           </p>
+          <div className="av-actions">
+            <label className="link-btn">
+              Trocar foto
+              <input type="file" accept="image/*" onChange={changeAvatar} hidden />
+            </label>
+            {hasCustom && (
+              <button type="button" className="link-btn" onClick={resetAvatar}>
+                Usar foto do Discord
+              </button>
+            )}
+          </div>
         </div>
       </div>
       <div className="bar">
@@ -427,7 +489,7 @@ export function Profile({ me, rk, onLogout }) {
         </span>
         <div>
           <b>Conectado</b>
-          <p className="m">
+          <p className="m uname">
             <span style={{ color: '#8a943e' }}>●</span> {me.user.name}
           </p>
         </div>
@@ -454,7 +516,7 @@ export function MissionModal({ m, onSubmit }) {
       <div className="paper">
         <b>Objetivo:</b> {m.objective}
       </div>
-      <p className="gain">+{m.points} pontos</p>
+      <p className="gain">+{m.points} Ducks</p>
       {m.status === 'rejected' && <div className="err">Sua prova anterior foi recusada. Envie outra.</div>}
       {m.needsReview && !done && !pend && (
         <>
@@ -465,7 +527,7 @@ export function MissionModal({ m, onSubmit }) {
             onChange={(e) => setProof(e.target.value)}
             placeholder="Conte o que você fez ou cole o link da mensagem"
           />
-          <p className="m small">Um admin confere antes de os pontos entrarem.</p>
+          <p className="m small">Um admin confere antes de os Ducks entrarem.</p>
         </>
       )}
       <div className="acts">
@@ -494,7 +556,6 @@ export function MissionModal({ m, onSubmit }) {
   );
 }
 
-// 2. Substitua WriteModal e LetterModal:
 export function WriteModal({ authorName, onSend }) {
   const [t, setT] = useState('');
   const [anon, setAnon] = useState(false);
@@ -508,7 +569,7 @@ export function WriteModal({ authorName, onSend }) {
 
       <div className="write-author">
         <Icon name="mail" size={15} />
-        <span>Aparecerá na árvore como: <b>{displayNick}</b></span>
+        <span>Aparecerá na árvore como: <b className="uname">{displayNick}</b></span>
       </div>
 
       <textarea
@@ -542,14 +603,14 @@ export const LetterModal = ({ l }) => (
   <>
     <div className="letter-from">
       <Icon name="mail" size={15} />
-      <span>Cartinha de <b>{l.author || 'Anônimo'}</b></span>
+      <span>Cartinha de <b className="uname">{l.author || 'Anônimo'}</b></span>
     </div>
     <h3>Uma cartinha para você</h3>
     <div className="paper">
       {l.text}
       <br />
       <br />
-      <i style={{ color: '#A81E23', fontWeight: 700 }}>— {l.author || 'Anônimo'}</i>
+      <i className="uname" style={{ color: '#A81E23', fontWeight: 700 }}>— {l.author || 'Anônimo'}</i>
     </div>
   </>
 );
@@ -628,7 +689,7 @@ export function GalleryPage({ items = [], me, isAdmin, onOpenForm, onReview, onI
                 {art.message && <p className="m">{art.message}</p>}
 
                 <div className="gal-foot">
-                  <small className="m">Por {art.authorName || 'Participante'}</small>
+                  <small className="m uname">Por {art.authorName || 'Participante'}</small>
 
                   {isAdmin && art.status === 'pending' && (
                     <div className="gal-mod">
@@ -668,7 +729,7 @@ export function GalleryModal({ onSubmit }) {
   const [file, setFile] = useState(null);
   const [sending, setSending] = useState(false);
 
-const handleFile = (e) => {
+  const handleFile = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
     setFile(f);
@@ -759,7 +820,7 @@ export function GalleryInspectModal({ art }) {
       <img src={art.imageUrl} alt={art.title} />
       <h3>{art.title}</h3>
       {art.message && <p className="m">{art.message}</p>}
-      <p className="small m">Enviado por {art.authorName || 'Participante'}</p>
+      <p className="small m uname">Enviado por {art.authorName || 'Participante'}</p>
     </div>
   );
 }
@@ -781,7 +842,6 @@ export function SupportPage() {
     <section className="glass hot">
       <p className="eyebrow">Atendimento</p>
       <h2>Suporte</h2>
-      {/* Insira aqui o embed, script ou botão de integração do seu bot */}
       <div id="support-bot-container" className="bot-slot" />
     </section>
   );
