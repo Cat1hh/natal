@@ -198,8 +198,9 @@ export function ChooseCommunity({ onSelect }) {
   );
 }
 
-/* ---------- Login (Discord, Google e E-mail) ---------- */
+/* ---------- Login (Discord, Google e E-mail expansível) ---------- */
 export function Login({ erro }) {
+  const [showEmail, setShowEmail] = useState(false);
   const [mode, setMode] = useState('login'); // 'login' | 'register'
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -257,7 +258,7 @@ export function Login({ erro }) {
         <p className="eyebrow">25 dias · missões · prêmios</p>
         <h1>Entre para acender a sua luz</h1>
         <p className="m">
-          Participe das missões, suba no ranking e deixe cartinhas na árvore da sua comunidade.
+          Escolha como deseja acessar o festival para participar das missões, subir no ranking e deixar cartinhas na árvore.
         </p>
 
         {(formErr || oauthErrMsg) && <div className="err">{formErr || oauthErrMsg}</div>}
@@ -277,72 +278,83 @@ export function Login({ erro }) {
             </svg>
             <span>Entrar com Google</span>
           </a>
-        </div>
 
-        <div className="auth-sep">
-          <span>ou com e-mail</span>
-        </div>
-
-        <div className="seg auth-tabs">
           <button
             type="button"
-            className={mode === 'login' ? 'on' : ''}
-            onClick={() => { setMode('login'); setFormErr(''); }}
+            className="btn ghost big"
+            onClick={() => {
+              setShowEmail((v) => !v);
+              setFormErr('');
+            }}
           >
-            Entrar
-          </button>
-          <button
-            type="button"
-            className={mode === 'register' ? 'on' : ''}
-            onClick={() => { setMode('register'); setFormErr(''); }}
-          >
-            Criar conta
+            <Icon name="mail" size={19} />
+            <span>Entrar com E-mail</span>
           </button>
         </div>
 
-        <form className="auth-form" onSubmit={handleEmailSubmit}>
-          {mode === 'register' && (
-            <input
-              type="text"
-              className="inp"
-              placeholder="Seu nome ou apelido"
-              maxLength={40}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          )}
+        {showEmail && (
+          <div className="email-box">
+            <div className="seg auth-tabs">
+              <button
+                type="button"
+                className={mode === 'login' ? 'on' : ''}
+                onClick={() => { setMode('login'); setFormErr(''); }}
+              >
+                Login
+              </button>
+              <button
+                type="button"
+                className={mode === 'register' ? 'on' : ''}
+                onClick={() => { setMode('register'); setFormErr(''); }}
+              >
+                Criar conta
+              </button>
+            </div>
 
-          <input
-            type="email"
-            className="inp"
-            placeholder="Seu e-mail"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
+            <form className="auth-form" onSubmit={handleEmailSubmit}>
+              {mode === 'register' && (
+                <input
+                  type="text"
+                  className="inp"
+                  placeholder="Seu nome ou apelido"
+                  maxLength={40}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              )}
 
-          <input
-            type="password"
-            className="inp"
-            placeholder={mode === 'register' ? 'Crie uma senha (mín. 6 caracteres)' : 'Sua senha'}
-            minLength={6}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+              <input
+                type="email"
+                className="inp"
+                placeholder="Seu e-mail"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
 
-          <button type="submit" className="btn red" disabled={busy}>
-            <Icon name="mail" size={17} />
-            <span>
-              {busy
-                ? 'Aguarde...'
-                : mode === 'register'
-                ? 'Criar conta e entrar'
-                : 'Entrar com e-mail'}
-            </span>
-          </button>
-        </form>
+              <input
+                type="password"
+                className="inp"
+                placeholder={mode === 'register' ? 'Crie uma senha (mín. 6 caracteres)' : 'Sua senha'}
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+
+              <button type="submit" className="btn red" disabled={busy}>
+                <span>
+                  {busy
+                    ? 'Aguarde...'
+                    : mode === 'register'
+                    ? 'Criar conta e entrar'
+                    : 'Entrar'}
+                </span>
+              </button>
+            </form>
+          </div>
+        )}
       </div>
     </section>
   );
