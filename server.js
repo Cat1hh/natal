@@ -814,7 +814,52 @@ app.post(
     });
   })
 );
+// GET /api/communities/:slug/ranking (ou /api/ranking)
+app.get('/api/communities/:slug/ranking', requireAuth, async (req, res) => {
+  const { slug } = req.params;
 
+  // Busca todos os participantes da comunidade ordenados por pontos no Supabase
+  const members = await prisma.member.findMany({
+    where: { communitySlug: slug },
+    include: { user: { select: { id: true, name: true, avatar: true } } },
+    orderBy: [
+      { points: 'desc' },
+      { updatedAt: 'asc' }, // desempate por quem chegou primeiro
+    ],
+  });
+
+  const ranking = members.map((m, idx) => ({
+    position: idx + 1,
+    id: m.user.id,
+    name: m.user.name,
+    avatar: m.user.avatar,
+    points: m.points,
+  }));
+
+  const myIndex = ranking.findIndex((r) => r.id === req.user.id);
+
+  res.json({
+    ranking,
+    me: myIndex >= 0
+      ? { position: ranking[myIndex].position, points: ranking[myIndex].points }
+      : { position: null, points: 0 },
+  });
+});
+app.get('/api/communities/:slug/me', requireAuth, async (req, res) => {
+  const { slug } = req.params;
+
+  const member = await prisma.member.findUnique({
+    where: {
+      userId_communitySlug: { userId: req.user.id, communitySlug: slug },
+    },
+  });
+
+  res.json({
+    user: req.user,
+    points: member?.points ?? 0,
+    missionsDone: member?.missionsDone ?? 0,
+  });
+});
 /* ---------- Ranking e Prêmios da Comunidade ---------- */
 app.get(
   '/api/ranking',
