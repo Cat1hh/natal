@@ -24,13 +24,14 @@ const COMMUNITIES = {
     events: [
       {
         id: 'natal-2026',
+        slug: 'natal',
         title: 'Natal Mágico 2026',
         badge: 'AO VIVO AGORA',
         status: 'live',
         date: '01 Dez – 25 Dez',
         description: '25 dias de missões diárias, árvore de cartinhas da comunidade e premiações especiais.',
-        cta: 'Participar agora',
-        target: '#natal-hub',
+        cta: 'Entrar no Evento',
+        path: '/comunidade/thekingdom/natal',
       },
       {
         id: 'ano-novo-2027',
@@ -61,13 +62,14 @@ const COMMUNITIES = {
     events: [
       {
         id: 'natal-2026-heaven',
+        slug: 'natal',
         title: 'Natal Mágico 2026 · Heaven',
         badge: 'AO VIVO AGORA',
         status: 'live',
         date: '01 Dez – 25 Dez',
         description: '25 dias de missões diárias, árvore de cartinhas da Heaven e premiações exclusivas.',
-        cta: 'Participar agora',
-        target: '#natal-hub',
+        cta: 'Entrar no Evento',
+        path: '/comunidade/heaven/natal',
       },
       {
         id: 'ano-novo-2027-heaven',
@@ -150,13 +152,16 @@ function getCommunityMeta(slug) {
     name: label,
     theme: 'kingdom',
     subtitle: 'Comunidade oficial · Eventos, desafios e recompensas',
-    events: COMMUNITIES[DEFAULT_COMMUNITY].events,
+    events: COMMUNITIES[DEFAULT_COMMUNITY].events.map((ev) => ({
+      ...ev,
+      path: ev.slug ? `/comunidade/${key}/${ev.slug}` : undefined,
+    })),
   };
 }
 
 function safeReturnPath(raw, fallback = '/comunidade') {
   const val = String(raw || '').trim();
-  if (val === '/') return '/comunidade';
+  if (!val || val === '/') return '/comunidade';
   if (val.startsWith('/') && !val.startsWith('//')) {
     return val.replace(/^\/comunidade\/ducks(?=\/|$)/i, '/comunidade/heaven');
   }
@@ -362,7 +367,7 @@ app.use('/api', (req, res, next) =>
   req.path === '/me' || req.user ? next() : res.status(401).json({ error: 'nao_autenticado' })
 );
 
-/* ---------- Login com Discord ---------- */
+/* ---------- Login com Discord (Portal Vulpora) ---------- */
 app.get('/auth/discord', (req, res) => {
   const state = randomBytes(16).toString('hex');
   const redirectUri = `${getBaseUrl(req)}/auth/discord/callback`;
@@ -446,7 +451,7 @@ app.get(
       }
 
       await createSession(res, userId);
-      res.redirect(`${returnTo}#inicio`);
+      res.redirect(returnTo);
     } catch (e) {
       console.error('Erro no login do Discord:', e.message);
       res.redirect(`${returnTo}?erro=discord`);
@@ -454,7 +459,7 @@ app.get(
   })
 );
 
-/* ---------- Login com Google ---------- */
+/* ---------- Login com Google (Portal Vulpora) ---------- */
 app.get('/auth/google', (req, res) => {
   const returnTo = safeReturnPath(req.query.returnTo);
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
@@ -556,7 +561,7 @@ app.get(
       }
 
       await createSession(res, userId);
-      res.redirect(`${returnTo}#inicio`);
+      res.redirect(returnTo);
     } catch (e) {
       console.error('Erro no login do Google:', e.message);
       res.redirect(`${returnTo}?erro=google`);
@@ -1119,26 +1124,33 @@ app.delete(
   })
 );
 
-/* ---------- Site, rotas /comunidade/:slug/natal e start ---------- */
+/* ---------- Site, rotas SPA (Portal -> Comunidade -> Evento) e start ---------- */
 app.get('/healthz', (req, res) => res.json({ ok: true }));
 app.use('/api', (req, res) => res.status(404).json({ error: 'rota_inexistente' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get(/^\/comunidade\/ducks(\/.*)?$/i, (req, res) => {
-  res.redirect('/comunidade/heaven/natal');
+  res.redirect(req.path.replace(/^\/comunidade\/ducks/i, '/comunidade/heaven'));
 });
 
-app.get('/comunidade/:slug', (req, res) => {
-  res.redirect(`/comunidade/${normalizeSlug(req.params.slug)}/natal`);
-});
-
-app.get(['/', '/comunidade', '/comunidade/', /^\/comunidade\/[^/]+\/natal(\/.*)?$/i], (req, res) => {
-  const indexFile = path.join(__dirname, 'public', 'index.html');
-  if (existsSync(indexFile)) {
-    return res.sendFile(indexFile);
+app.get('/comunidade/:slug', (req, res, next) => {
+  const normalized = normalizeSlug(req.params.slug);
+  if (req.params.slug !== normalized) {
+    return res.redirect(`/comunidade/${normalized}`);
   }
-  res.type('html').send('<h1>Servidor no ar, mas falta o build em public/index.html</h1>');
+  next();
 });
+
+app.get(
+  ['/', '/comunidade', '/comunidade/', '/comunidade/:slug', /^\/comunidade\/[^/]+\/natal(\/.*)?$/i],
+  (req, res) => {
+    const indexFile = path.join(__dirname, 'public', 'index.html');
+    if (existsSync(indexFile)) {
+      return res.sendFile(indexFile);
+    }
+    res.type('html').send('<h1>Servidor no ar, mas falta o build em public/index.html</h1>');
+  }
+);
 
 app.use((err, req, res, next) => {
   console.error(err);
@@ -1150,11 +1162,13 @@ if (!VERCEL) {
   const server = app.listen(PORT, () => {
     const ev = eventState();
     console.log(
-      `\nPortal Vulpora & Natal Mágico no ar!\n` +
-      `• Portal:      http://localhost:${PORT}/comunidade\n` +
-      `• The Kingdom: http://localhost:${PORT}/comunidade/thekingdom/natal\n` +
-      `• Heaven:      http://localhost:${PORT}/comunidade/heaven/natal\n` +
-      `(Evento: ${ev.status}, dia ${ev.today})\n`
+      `\nPortal Vulpora no ar!\n` +
+      `• Portal:             http://localhost:${PORT}/comunidade\n` +
+      `• Comunidade Kingdom: http://localhost:${PORT}/comunidade/thekingdom\n` +
+      `• Comunidade Heaven:  http://localhost:${PORT}/comunidade/heaven\n` +
+      `• Evento Kingdom:     http://localhost:${PORT}/comunidade/thekingdom/natal\n` +
+      `• Evento Heaven:      http://localhost:${PORT}/comunidade/heaven/natal\n` +
+      `(Evento Natal Mágico: ${ev.status}, dia ${ev.today})\n`
     );
   });
   server.on('error', (e) => {

@@ -2194,3 +2194,182 @@ textarea { width: 100%; margin-top: 8px; padding: 12px; border-radius: 14px; bor
 .crumb-link:hover {
   opacity: 1;
 }
+/* ==========================================================================
+   PÁGINA DA COMUNIDADE (/comunidade/:slug — TEMA KINGDOM / HEAVEN, SEM NATAL)
+   ========================================================================== */
+.comm-shell {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  padding-bottom: 48px;
+}
+
+.comm-shell.theme-kingdom {
+  background: radial-gradient(circle at 15% 10%, rgba(168, 30, 35, 0.28), transparent 45%),
+              radial-gradient(circle at 85% 20%, rgba(244, 165, 29, 0.18), transparent 45%),
+              linear-gradient(165deg, #16090e 0%, #220d15 50%, #12070c 100%);
+}
+
+.comm-shell.theme-ducks {
+  background: radial-gradient(circle at 18% 12%, rgba(56, 189, 248, 0.26), transparent 46%),
+              radial-gradient(circle at 84% 22%, rgba(125, 211, 252, 0.16), transparent 45%),
+              linear-gradient(165deg, #071322 0%, #0c213b 52%, #06101d 100%);
+}
+
+.comm-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 0 22px;
+  flex-wrap: wrap;
+}
+
+.comm-page-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.comm-banner-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 28px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(16px);
+  flex-wrap: wrap;
+}
+
+.comm-banner-card.is-kingdom {
+  background: linear-gradient(135deg, rgba(168, 30, 35, 0.28), rgba(244, 165, 29, 0.12));
+  border-color: rgba(244, 165, 29, 0.35);
+}
+
+.comm-banner-card.is-heaven {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.24), rgba(14, 116, 144, 0.16));
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.comm-banner-emblem {
+  width: 76px;
+  height: 76px;
+  border-radius: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--gold, #f4a51d);
+  flex-shrink: 0;
+}
+
+.comm-banner-card.is-heaven .comm-banner-emblem {
+  color: #7dd3fc;
+}
+
+.comm-banner-info h1 {
+  margin: 8px 0 4px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 2rem;
+}
+
+.comm-member-pill {
+  font-size: 0.78rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.comm-section-card {
+  padding: 26px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+}
+
+.comm-sec-head {
+  margin-bottom: 18px;
+}
+
+.comm-eyebrow {
+  margin: 0 0 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--gold, #f4a51d);
+  text-transform: uppercase;
+}
+
+.comm-section-card h2 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.comm-events-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.comm-ev-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.comm-ev-card.is-live {
+  border-color: rgba(244, 165, 29, 0.45);
+  background: linear-gradient(160deg, rgba(244, 165, 29, 0.12), rgba(0, 0, 0, 0.28));
+}
+
+.comm-ev-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.comm-ev-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.comm-ev-badge.live {
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+.comm-ev-badge.soon {
+  background: rgba(244, 165, 29, 0.15);
+  color: #fcd34d;
+  border: 1px solid rgba(244, 165, 29, 0.3);
+}
+
+.comm-ev-date {
+  font-size: 0.78rem;
+  opacity: 0.75;
+}
+
+.comm-ev-card h3 {
+  margin: 4px 0 0;
+  font-size: 1.15rem;
+}
+
+.comm-ev-foot {
+  margin-top: auto;
+  padding-top: 8px;
+}

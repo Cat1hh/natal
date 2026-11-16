@@ -37,17 +37,14 @@ export function VulporaLogo({ compact = false }) {
         </defs>
 
         <g filter="url(#vpGlow)">
-          {/* Lua crescente luminosa */}
           <path
             d="M54 16 C31 20 16 41 19 65 C22 88 43 104 67 101 C81 99 93 91 100 80 C87 89 69 90 54 81 C37 70 32 47 43 30 C46 24 50 20 54 16 Z"
             fill="url(#vpMoonGrad)"
           />
-          {/* Silhueta estilizada da raposa */}
           <path
             d="M64 24 L58 43 L48 53 L56 60 L51 74 C63 77 77 72 86 61 L93 47 L82 46 L86 28 L72 38 Z"
             fill="url(#vpFoxGrad)"
           />
-          {/* Brilho estelar */}
           <path
             d="M42 46 L44 51 L49 53 L44 55 L42 60 L40 55 L35 53 L40 51 Z"
             fill="#FDE68A"
@@ -63,9 +60,8 @@ export function VulporaLogo({ compact = false }) {
   );
 }
 
-/* ---------- Tela de Login & Cadastro Vulpora (Fora do tema de Natal) ---------- */
-export function Login({ erro, communityMeta, isPortal, onNotify }) {
-  // 'login' (Bem-vindo de volta), 'register' (Crie sua conta), 'welcome' (Tela inicial Vulpora)
+/* ---------- 1. Tela de Login & Cadastro (100% Vulpora — Independente de Comunidade/Evento) ---------- */
+export function Login({ erro, isPortal = true, onNotify }) {
   const [screen, setScreen] = useState('login');
   const [loginId, setLoginId] = useState('');
   const [name, setName] = useState('');
@@ -75,7 +71,8 @@ export function Login({ erro, communityMeta, isPortal, onNotify }) {
   const [busy, setBusy] = useState(false);
   const [formErr, setFormErr] = useState('');
 
-  const returnTo = encodeURIComponent(isPortal ? '/comunidade' : getCommunityBasePath());
+  const targetAfterLogin = isPortal ? '/comunidade' : getCommunityBasePath();
+  const returnTo = encodeURIComponent(targetAfterLogin);
 
   const oauthErrMsg =
     erro === 'google'
@@ -116,8 +113,7 @@ export function Login({ erro, communityMeta, isPortal, onNotify }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || 'Não foi possível autenticar.');
 
-      window.location.hash = '#inicio';
-      window.location.reload();
+      window.location.href = targetAfterLogin;
     } catch (err) {
       setFormErr(err.message);
     } finally {
@@ -151,12 +147,6 @@ export function Login({ erro, communityMeta, isPortal, onNotify }) {
         )}
 
         <VulporaLogo />
-
-        {!isPortal && communityMeta?.name && (
-          <div className="vp-dest-pill">
-            <span>Acessando comunidade: <b>{communityMeta.name}</b></span>
-          </div>
-        )}
 
         {(formErr || oauthErrMsg) && <div className="vp-err">{formErr || oauthErrMsg}</div>}
 
@@ -370,7 +360,7 @@ export function Login({ erro, communityMeta, isPortal, onNotify }) {
   );
 }
 
-/* ---------- Vitrine de Comunidades Vulpora (Fora do tema de Natal) ---------- */
+/* ---------- 2. Portal de Comunidades (/comunidade — Vulpora) ---------- */
 export function CommunitiesHub({ user, communities = [], onSelect }) {
   return (
     <section className="vulpora-portal-card">
@@ -429,6 +419,132 @@ export function CommunitiesHub({ user, communities = [], onSelect }) {
         })}
       </div>
     </section>
+  );
+}
+
+/* ---------- 3. Página da Comunidade (/comunidade/:slug — Kingdom ou Heaven, SEM Natal) ---------- */
+export function CommunityPage({ me, rk, communityMeta, onEnterEvent, onNotify }) {
+  const commName = communityMeta?.name || 'The Kingdom';
+  const commTag = communityMeta?.tag || 'THE KINGDOM';
+  const isHeaven = communityMeta?.theme === 'ducks' || communityMeta?.slug === 'heaven';
+  const events = communityMeta?.events || [];
+
+  const [reminded, setReminded] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('vulpora_event_reminders') || '{}');
+    } catch {
+      return {};
+    }
+  });
+
+  const toggleReminder = (evItem) => {
+    const updated = { ...reminded, [evItem.id]: !reminded[evItem.id] };
+    setReminded(updated);
+    localStorage.setItem('vulpora_event_reminders', JSON.stringify(updated));
+    onNotify?.(
+      updated[evItem.id]
+        ? `Lembrete ativado para "${evItem.title}"!`
+        : `Lembrete removido de "${evItem.title}".`
+    );
+  };
+
+  return (
+    <div className="comm-page-wrap">
+      <section className={`comm-banner-card ${isHeaven ? 'is-heaven' : 'is-kingdom'}`}>
+        <div className="comm-banner-emblem" aria-hidden="true">
+          {isHeaven ? (
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+            </svg>
+          ) : (
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14" />
+            </svg>
+          )}
+        </div>
+
+        <div className="comm-banner-info">
+          <div className="who-name">
+            <CommunityTag tag={commTag} theme={communityMeta?.theme} />
+            <span className="comm-member-pill">Membro conectado: {me?.user?.name}</span>
+          </div>
+          <h1>{commName}</h1>
+          <p className="m">{communityMeta?.subtitle}</p>
+        </div>
+      </section>
+
+      <section className="comm-section-card">
+        <div className="comm-sec-head">
+          <div>
+            <p className="comm-eyebrow">EVENTOS & TEMPORADAS · {commTag}</p>
+            <h2>Eventos da Comunidade</h2>
+          </div>
+        </div>
+
+        <div className="comm-events-grid">
+          {events.map((evItem) => {
+            const isLive = evItem.status === 'live';
+            const isReminded = Boolean(reminded[evItem.id]);
+
+            return (
+              <article
+                key={evItem.id}
+                className={`comm-ev-card ${isLive ? 'is-live' : 'is-upcoming'}`}
+              >
+                <div className="comm-ev-top">
+                  <span className={`comm-ev-badge ${isLive ? 'live' : 'soon'}`}>
+                    <Icon name={isLive ? 'sparkles' : 'calendar'} size={13} />
+                    <span>{evItem.badge}</span>
+                  </span>
+                  <span className="comm-ev-date">{evItem.date}</span>
+                </div>
+
+                <h3>{evItem.title}</h3>
+                <p className="m">{evItem.description}</p>
+
+                <div className="comm-ev-foot">
+                  {isLive ? (
+                    <button
+                      type="button"
+                      className={`comm-enter-btn ${isHeaven ? 'heaven' : 'kingdom'}`}
+                      onClick={onEnterEvent}
+                    >
+                      <span>Entrar no Evento</span>
+                      <span className="vp-arrow-circle">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="5" y1="12" x2="19" y2="12" />
+                          <polyline points="12 5 19 12 12 19" />
+                        </svg>
+                      </span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      style={{ width: '100%', justifyContent: 'center' }}
+                      onClick={() => toggleReminder(evItem)}
+                    >
+                      <Icon name={isReminded ? 'check' : 'clock'} size={16} />
+                      <span>{isReminded ? 'Lembrete ativado' : evItem.cta || 'Avise-me'}</span>
+                    </button>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="comm-section-card">
+        <div className="comm-sec-head">
+          <div>
+            <p className="comm-eyebrow">DESTAQUES · {commTag}</p>
+            <h2>Ranking da Comunidade</h2>
+          </div>
+        </div>
+        <Ranking rk={rk || { ranking: [] }} />
+      </section>
+    </div>
   );
 }
 
@@ -587,126 +703,8 @@ export function CommunityTag({ tag, theme }) {
   );
 }
 
-/* ---------- Carrossel de Eventos Futuros & Ativos ---------- */
-export function EventsCarousel({ events = [], onNotify }) {
-  const [index, setIndex] = useState(0);
-  const [reminded, setReminded] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('vulpora_event_reminders') || '{}');
-    } catch {
-      return {};
-    }
-  });
-
-  if (!events.length) return null;
-
-  const prev = () => setIndex((i) => (i - 1 + events.length) % events.length);
-  const next = () => setIndex((i) => (i + 1) % events.length);
-
-  const toggleReminder = (ev) => {
-    const updated = { ...reminded, [ev.id]: !reminded[ev.id] };
-    setReminded(updated);
-    localStorage.setItem('vulpora_event_reminders', JSON.stringify(updated));
-    onNotify?.(
-      updated[ev.id]
-        ? `Lembrete ativado para "${ev.title}"!`
-        : `Lembrete removido de "${ev.title}".`
-    );
-  };
-
-  return (
-    <section className="glass hot events-carousel-sec" aria-label="Eventos da comunidade">
-      <div className="carousel-head">
-        <div>
-          <p className="eyebrow">PROGRAMAÇÃO & PRÓXIMOS EVENTOS</p>
-          <h2 style={{ margin: 0 }}>Eventos da Comunidade</h2>
-        </div>
-
-        <div className="carousel-controls">
-          <button type="button" className="car-arrow" onClick={prev} aria-label="Evento anterior">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-          </button>
-          <button type="button" className="car-arrow" onClick={next} aria-label="Próximo evento">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <div className="carousel-viewport">
-        <div
-          className="carousel-track"
-          style={{ transform: `translateX(-${index * 100}%)` }}
-        >
-          {events.map((item) => {
-            const isLive = item.status === 'live';
-            const isReminded = Boolean(reminded[item.id]);
-
-            return (
-              <div key={item.id} className="carousel-slide">
-                <div className={`event-banner ${isLive ? 'is-live' : 'is-upcoming'}`}>
-                  <div className="event-banner-top">
-                    <span className={`badge ${isLive ? 'pine' : 'gold'}`}>
-                      <Icon name={isLive ? 'sparkles' : 'calendar'} size={13} />
-                      <span>{item.badge}</span>
-                    </span>
-                    <span className="event-date">{item.date}</span>
-                  </div>
-
-                  <h3>{item.title}</h3>
-                  <p className="m">{item.description}</p>
-
-                  <div className="event-banner-foot">
-                    {isLive ? (
-                      <button
-                        type="button"
-                        className="btn red"
-                        onClick={() => {
-                          const el = document.querySelector(item.target || '#natal-hub');
-                          el?.scrollIntoView({ behavior: 'smooth' });
-                        }}
-                      >
-                        <Icon name="sparkles" size={16} />
-                        <span>{item.cta || 'Participar agora'}</span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className={`btn ${isReminded ? 'pine' : 'ghost'}`}
-                        onClick={() => toggleReminder(item)}
-                      >
-                        <Icon name={isReminded ? 'check' : 'clock'} size={16} />
-                        <span>{isReminded ? 'Lembrete ativado' : item.cta || 'Avise-me'}</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="carousel-dots" role="tablist" aria-label="Selecionar evento">
-        {events.map((item, idx) => (
-          <button
-            key={item.id}
-            type="button"
-            className={`car-dot ${idx === index ? 'on' : ''}`}
-            onClick={() => setIndex(idx)}
-            aria-label={`Ver ${item.title}`}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-/* ---------- Tela Principal da Comunidade (/comunidade/:slug/natal) ---------- */
-export function Home({ me, ev, rk, communityMeta, letters, onOpen, onWrite, onMission, onNotify }) {
+/* ---------- 4. Tela Inicial do Evento (/comunidade/:slug/natal — Natal Mágico) ---------- */
+export function Home({ me, ev, communityMeta, letters, onOpen, onWrite, onMission, onBackToCommunity }) {
   const m = ev.missions[Math.max(ev.today, 1) - 1] || ev.missions[0];
   const C = 2 * Math.PI * 42;
   const rest = Math.max(0, 25 - ev.today);
@@ -731,14 +729,18 @@ export function Home({ me, ev, rk, communityMeta, letters, onOpen, onWrite, onMi
             <div className="who-name">
               <CommunityTag tag={commTag} theme={commTheme} />
               <span className="badge gold">
-                <Icon name="sparkles" size={13} /> Comunidade Oficial
+                <Icon name="sparkles" size={13} /> Evento Especial · Natal 2026
               </span>
             </div>
-            <h1 style={{ margin: '8px 0 4px' }}>{commName}</h1>
-            <p className="m">{communityMeta?.subtitle}</p>
+            <h1 style={{ margin: '8px 0 4px' }}>Natal Mágico · {commName}</h1>
+            <p className="m">Complete missões diárias, pendure cartinhas na árvore e suba no ranking do evento.</p>
           </div>
 
           <div className="comm-hero-links">
+            <button type="button" className="btn ghost" onClick={onBackToCommunity}>
+              <Icon name="home" size={16} />
+              <span>Comunidade</span>
+            </button>
             <a href="#calendario" className="btn ghost">
               <Icon name="calendar" size={16} />
               <span>Calendário</span>
@@ -750,8 +752,6 @@ export function Home({ me, ev, rk, communityMeta, letters, onOpen, onWrite, onMi
           </div>
         </div>
       </section>
-
-      <EventsCarousel events={communityMeta?.events || []} onNotify={onNotify} />
 
       <div id="natal-hub" className="home">
         <section className="glass hot">
@@ -850,20 +850,6 @@ export function Home({ me, ev, rk, communityMeta, letters, onOpen, onWrite, onMi
           )}
         </section>
       </div>
-
-      <section className="glass hot">
-        <div className="tree-head" style={{ marginBottom: 12 }}>
-          <div>
-            <p className="eyebrow">{commTag} · TOP PARTICIPANTES</p>
-            <h2 style={{ margin: 0 }}>Ranking da Comunidade</h2>
-          </div>
-          <a href="#ranking" className="btn ghost">
-            <Icon name="trophy" size={16} />
-            <span>Ver completo</span>
-          </a>
-        </div>
-        <Ranking rk={rk || { ranking: [] }} />
-      </section>
     </div>
   );
 }

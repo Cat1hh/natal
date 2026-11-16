@@ -1,18 +1,32 @@
-export function isPortalPath(pathname = typeof window !== 'undefined' ? window.location.pathname : '/') {
+export function getRouteContext(pathname = typeof window !== 'undefined' ? window.location.pathname : '/') {
   const clean = pathname.replace(/\/+$/, '') || '/';
-  return clean === '/' || clean === '/comunidade';
+  const isPortal = clean === '/' || clean === '/login' || clean === '/comunidade';
+  const match = clean.match(/^\/comunidade\/([^/]+)(\/natal(?:\/.*)?)?$/i);
+
+  if (!match) {
+    return { isPortal: true, communitySlug: null, isEvent: false, isCommunity: false };
+  }
+
+  const rawSlug = match[1].toLowerCase();
+  const communitySlug = rawSlug === 'ducks' ? 'heaven' : rawSlug;
+  const isEvent = Boolean(match[2]);
+
+  return {
+    isPortal: false,
+    communitySlug,
+    isEvent,
+    isCommunity: !isEvent,
+  };
 }
 
-export function getCommunitySlug(pathname = typeof window !== 'undefined' ? window.location.pathname : '/') {
-  const match = pathname.match(/^\/comunidade\/([^/]+)/i);
-  if (!match) return null;
-  const slug = match[1].toLowerCase();
-  return slug === 'ducks' ? 'heaven' : slug;
+export function getCommunitySlug(pathname) {
+  return getRouteContext(pathname).communitySlug;
 }
 
-export function getCommunityBasePath(pathname = typeof window !== 'undefined' ? window.location.pathname : '/') {
-  const slug = getCommunitySlug(pathname);
-  return slug ? `/comunidade/${slug}/natal` : '/comunidade';
+export function getCommunityBasePath(pathname) {
+  const { communitySlug, isEvent } = getRouteContext(pathname);
+  if (!communitySlug) return '/comunidade';
+  return isEvent ? `/comunidade/${communitySlug}/natal` : `/comunidade/${communitySlug}`;
 }
 
 async function req(url, opts = {}) {

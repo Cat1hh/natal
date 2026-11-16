@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { api, getCommunityBasePath, getCommunitySlug, isPortalPath } from './api.js';
+import { api, getRouteContext } from './api.js';
 import { Tree, Snow, Burst } from './tree.jsx';
 import { Icon } from './icons.jsx';
 import {
   Avatar,
   CommunityTag,
+  VulporaLogo,
   CommunitiesHub,
+  CommunityPage,
   Login,
   Home,
   Calendar,
@@ -28,7 +30,7 @@ const DEFAULT_COMMUNITIES = [
     tag: 'THE KINGDOM',
     name: 'The Kingdom',
     theme: 'kingdom',
-    subtitle: 'Comunidade oficial · Eventos, desafios e recompensas exclusivas',
+    subtitle: 'Comunidade oficial · Eventos, desafios, histórias e recompensas exclusivas',
   },
   {
     slug: 'heaven',
@@ -40,9 +42,7 @@ const DEFAULT_COMMUNITIES = [
 ];
 
 function getFallbackMeta(slug) {
-  if (slug === 'heaven') {
-    return DEFAULT_COMMUNITIES[1];
-  }
+  if (slug === 'heaven') return DEFAULT_COMMUNITIES[1];
   return DEFAULT_COMMUNITIES[0];
 }
 
@@ -86,7 +86,7 @@ function Side({ rk, pz, done, showPrizes }) {
       ) : (
         <h3 className="ico-title" style={{ marginTop: 0, marginBottom: 10 }}>
           <Icon name="trophy" size={20} />
-          <span>Ranking da Comunidade</span>
+          <span>Ranking do Evento</span>
         </h3>
       )}
       {t === 'rk' || !showPrizes ? <Ranking rk={rk} /> : <Prizes pz={pz} done={done} />}
@@ -94,7 +94,7 @@ function Side({ rk, pz, done, showPrizes }) {
   );
 }
 
-/* ---------- Página Exclusiva da Árvore ---------- */
+/* ---------- Página Exclusiva da Árvore (dentro do Evento de Natal) ---------- */
 export function TreePage({ letters = [], communityMeta, onOpen, onWrite }) {
   const [page, setPage] = useState(0);
   const total = letters.length;
@@ -179,8 +179,7 @@ export function TreePage({ letters = [], communityMeta, onOpen, onWrite }) {
 export default function App() {
   const route = useHash(), wide = useWide();
   const [pathname, setPathname] = useState(() => window.location.pathname);
-  const portal = isPortalPath(pathname);
-  const communitySlug = getCommunitySlug(pathname);
+  const { isPortal, communitySlug, isEvent, isCommunity } = getRouteContext(pathname);
 
   const [me, setMe] = useState(undefined);
   const [communities, setCommunities] = useState(DEFAULT_COMMUNITIES);
@@ -197,12 +196,13 @@ export default function App() {
   const toastTimer = useRef(null);
 
   const navigateTo = useCallback((nextPath) => {
+    const [cleanPath, hashPart] = nextPath.split('#');
     window.history.pushState(null, '', nextPath);
-    setPathname(nextPath.split('#')[0]);
-    if (nextPath.includes('#')) {
-      window.location.hash = nextPath.split('#')[1];
-    } else {
-      window.history.replaceState(null, '', nextPath);
+    setPathname(cleanPath);
+    if (hashPart) {
+      window.location.hash = hashPart;
+    } else if (window.location.hash) {
+      window.history.replaceState(null, '', cleanPath);
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
@@ -213,12 +213,12 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
-  // Normaliza /comunidade/ducks -> /comunidade/heaven/natal
+  // Normaliza /comunidade/ducks -> /comunidade/heaven
   useEffect(() => {
     if (/^\/comunidade\/ducks(\/|$)/i.test(pathname)) {
-      const target = getCommunityBasePath(pathname);
-      window.history.replaceState(null, '', `${target}${window.location.search}${window.location.hash}`);
-      setPathname(target);
+      const normalized = pathname.replace(/^\/comunidade\/ducks/i, '/comunidade/heaven');
+      window.history.replaceState(null, '', `${normalized}${window.location.search}${window.location.hash}`);
+      setPathname(normalized);
     }
   }, [pathname]);
 
@@ -230,6 +230,7 @@ export default function App() {
 
   const load = useCallback(async () => {
     setNetErr('');
+    const ctx = getRouteContext(window.location.pathname);
     const m = await api.me();
     if (m.communities?.length) setCommunities(m.communities);
     if (m.community) setCommunityMeta(m.community);
@@ -237,12 +238,22 @@ export default function App() {
 
     setMe(m);
 
-    // Se estiver na vitrine (/ ou /comunidade), não precisa carregar dados de evento específico ainda
-    if (isPortalPath(window.location.pathname)) {
+    // Portal (/ ou /comunidade): não carrega dados de comunidade/evento
+    if (ctx.isPortal) {
+      setEv(null);
+      setRk(null);
+      return;
+    }
+
+    // Página da Comunidade (/comunidade/:slug): carrega ranking da comunidade
+    if (ctx.isCommunity) {
+      const r = await api.ranking().catch(() => ({ ranking: [], me: null }));
+      setRk(r);
       setEv(null);
       return;
     }
 
+    // Página do Evento (/comunidade/:slug/natal): carrega tudo do evento
     const [e, r, p, l, g] = await Promise.all([
       api.event(),
       api.ranking().catch(() => ({ ranking: [], me: null })),
@@ -264,18 +275,30 @@ export default function App() {
     });
   }, [load, pathname]);
 
-  const activeMeta = portal ? null : (communityMeta || getFallbackMeta(communitySlug));
+  const activeMeta = isPortal ? null : (communityMeta || getFallbackMeta(communitySlug));
   const commName = activeMeta?.name || 'Vulpora';
   const commTag = activeMeta?.tag || 'COMUNIDADES';
 
+  // Separação estrita de temas:
+  // 1) Deslogado ou Portal -> 'vulpora' (screen: 'login' | 'portal')
+  // 2) Comunidade -> 'kingdom' ou 'ducks' (screen: 'community') — SEM Natal
+  // 3) Evento -> 'natal' + community accent (screen: 'event') — COM Natal
   useEffect(() => {
-    if (portal) {
-      document.documentElement.dataset.community = 'kingdom';
+    const root = document.documentElement;
+    if (!me) {
+      root.dataset.screen = 'login';
+      root.dataset.community = 'vulpora';
+    } else if (isPortal) {
+      root.dataset.screen = 'portal';
+      root.dataset.community = 'vulpora';
+    } else if (isCommunity) {
+      root.dataset.screen = 'community';
+      root.dataset.community = activeMeta?.theme || (communitySlug === 'heaven' ? 'ducks' : 'kingdom');
     } else {
-      document.documentElement.dataset.community =
-        activeMeta?.theme || (communitySlug === 'heaven' ? 'ducks' : 'kingdom');
+      root.dataset.screen = 'event';
+      root.dataset.community = activeMeta?.theme || (communitySlug === 'heaven' ? 'ducks' : 'kingdom');
     }
-  }, [portal, activeMeta?.theme, communitySlug]);
+  }, [me, isPortal, isCommunity, activeMeta?.theme, communitySlug]);
 
   useEffect(() => {
     const f = (e) => e.key === 'Escape' && setModal(null);
@@ -291,7 +314,7 @@ export default function App() {
   const canSeePrizes = isAdmin || isFinale;
 
   const tabs = [
-    ['inicio', 'home', 'Comunidade'],
+    ['inicio', 'home', 'Início do Evento'],
     ['arvore', 'tree', 'Árvore de Natal'],
     ['calendario', 'calendar', 'Calendário'],
     ['ranking', 'trophy', 'Ranking'],
@@ -402,59 +425,54 @@ export default function App() {
     setLetters([]);
     setGallery([]);
     setModal(null);
+    navigateTo('/');
   };
 
   const openMission = (m) => setModal({ t: 'mission', day: m.day });
 
   const activeTab = tabs.find(([id]) => id === route) ? route : 'inicio';
-  const currentTabLabel = tabs.find(([id]) => id === activeTab)?.[2] || 'Comunidade';
+  const currentTabLabel = tabs.find(([id]) => id === activeTab)?.[2] || 'Início do Evento';
 
-  // 1. Carregando sessão
+  /* ========================================================================
+     1. CARREGANDO SESSÃO (VULPORA)
+     ======================================================================== */
   if (me === undefined) {
     return (
-      <>
-        <div className="aurora" aria-hidden="true"><i /><i /><i /></div>
-        <Snow />
-        <div className="wrap">
-          <main><p className="m center pad">Acendendo as luzes…</p></main>
-        </div>
-      </>
+      <div className="vulpora-auth-shell">
+        <div className="vulpora-waves" aria-hidden="true" />
+        <p className="m center pad" style={{ position: 'relative', zIndex: 2 }}>Carregando Vulpora…</p>
+      </div>
     );
   }
 
-  // 2. Não logado -> Sempre exige Login primeiro (Google, Discord ou E-mail)
+  /* ========================================================================
+     2. TELA DE LOGIN (100% VULPORA — SEPARADA DE COMUNIDADE E DE EVENTO)
+     ======================================================================== */
   if (!me) {
     return (
       <>
-        <div className="aurora" aria-hidden="true"><i /><i /><i /></div>
-        <Snow />
-        <div className="wrap">
-          <header className="solo">
-            <div className="brand">{portal ? 'Vulpora · Comunidades' : `${commName} · Natal`}</div>
-          </header>
-          <main>
-            <Login
-              erro={netErr || new URLSearchParams(location.search).get('erro')}
-              communityMeta={activeMeta}
-              isPortal={portal}
-            />
-          </main>
-        </div>
+        <Login
+          erro={netErr || new URLSearchParams(location.search).get('erro')}
+          isPortal={isPortal}
+          onNotify={say}
+        />
+        {toast && <div className="toast" role="status">{toast}</div>}
       </>
     );
   }
 
-  // 3. Logado e na página inicial (/ ou /comunidade) -> Mostra as comunidades para escolher
-  if (portal) {
+  /* ========================================================================
+     3. PORTAL DE COMUNIDADES (/comunidade — VULPORA)
+     ======================================================================== */
+  if (isPortal) {
     return (
-      <>
-        <div className="aurora" aria-hidden="true"><i /><i /><i /></div>
-        <Snow />
-        <div className="wrap">
-          <header className="solo portal-header">
-            <div className="brand">Vulpora · Comunidades</div>
+      <div className="vulpora-portal-shell">
+        <div className="vulpora-waves" aria-hidden="true" />
+        <div className="wrap" style={{ position: 'relative', zIndex: 2 }}>
+          <header className="portal-topbar">
+            <VulporaLogo compact />
             <div className="topbar-right">
-              <div className="chip">
+              <div className="chip vp-chip">
                 <Avatar u={me.user} />
                 <span className="uname">{me.user.name}</span>
               </div>
@@ -463,22 +481,81 @@ export default function App() {
               </button>
             </div>
           </header>
+
           <main>
             <CommunitiesHub
               user={me.user}
               communities={communities}
-              onSelect={(slug) => navigateTo(`/comunidade/${slug}/natal#inicio`)}
+              onSelect={(slug) => navigateTo(`/comunidade/${slug}`)}
             />
           </main>
         </div>
         {toast && <div className="toast" role="status">{toast}</div>}
-      </>
+      </div>
     );
   }
 
-  // 4. Logado dentro de uma comunidade (/comunidade/:slug/natal)
+  /* ========================================================================
+     4. PÁGINA DA COMUNIDADE (/comunidade/:slug — TEMA KINGDOM / HEAVEN, SEM NATAL)
+     ======================================================================== */
+  if (isCommunity) {
+    return (
+      <div className={`comm-shell theme-${activeMeta?.theme || 'kingdom'}`}>
+        <div className="comm-backdrop" aria-hidden="true" />
+        <div className="wrap" style={{ position: 'relative', zIndex: 2 }}>
+          <header className="comm-topbar">
+            <div className="crumb">
+              <span className="dot" />
+              <button
+                type="button"
+                className="crumb-link"
+                onClick={() => navigateTo('/comunidade')}
+              >
+                VULPORA
+              </button>
+              <span className="sep">/</span>
+              <b>{commTag}</b>
+            </div>
+
+            <div className="topbar-right">
+              <button
+                type="button"
+                className="btn ghost btn-sm"
+                onClick={() => navigateTo('/comunidade')}
+              >
+                Trocar comunidade
+              </button>
+              <div className="chip">
+                <Avatar u={me.user} />
+                <span className="uname">{me.user.name}</span>
+                <CommunityTag tag={commTag} theme={activeMeta?.theme} />
+              </div>
+              <button type="button" className="btn ghost btn-sm" onClick={logout}>
+                Sair
+              </button>
+            </div>
+          </header>
+
+          <main>
+            <CommunityPage
+              me={me}
+              rk={rk}
+              communityMeta={activeMeta}
+              onEnterEvent={() => navigateTo(`/comunidade/${communitySlug}/natal#inicio`)}
+              onNotify={say}
+            />
+          </main>
+        </div>
+        {toast && <div className="toast" role="status">{toast}</div>}
+      </div>
+    );
+  }
+
+  /* ========================================================================
+     5. PÁGINA DO EVENTO (/comunidade/:slug/natal — EVENTO DE NATAL)
+     ======================================================================== */
   const view = !ev ? (
-    <p className="m center pad">Carregando comunidade…</p>
+    <p className="m center pad">Carregando evento…</p>
   ) : activeTab === 'arvore' ? (
     <TreePage
       letters={letters}
@@ -504,8 +581,8 @@ export default function App() {
     <SupportPage />
   ) : activeTab === 'ranking' ? (
     <section className="glass hot">
-      <p className="eyebrow">{commTag} · CLASSIFICAÇÃO</p>
-      <h2>Ranking da Comunidade</h2>
+      <p className="eyebrow">{commTag} · CLASSIFICAÇÃO DO EVENTO</p>
+      <h2>Ranking · Natal Mágico</h2>
       <Ranking rk={rk || { ranking: [] }} />
     </section>
   ) : activeTab === 'premios' && canSeePrizes ? (
@@ -519,13 +596,12 @@ export default function App() {
     <Home
       me={me}
       ev={ev}
-      rk={rk}
       communityMeta={activeMeta}
       letters={letters}
       onOpen={openLetter}
       onWrite={() => setModal({ t: 'write' })}
       onMission={openMission}
-      onNotify={(msg) => say(msg)}
+      onBackToCommunity={() => navigateTo(`/comunidade/${communitySlug}`)}
     />
   );
 
@@ -550,19 +626,19 @@ export default function App() {
       <Snow />
 
       <div className="app-shell">
-        <aside className="sidebar" aria-label="Navegação principal">
+        <aside className="sidebar" aria-label="Navegação do evento">
           <div>
             <a href="#inicio" className="side-brand">
               <span className="side-emblem">
                 <Icon name="sparkles" size={18} />
               </span>
               <div>
-                <div className="brand">{commName}</div>
-                <small>COMUNIDADE · NATAL 2026</small>
+                <div className="brand">Natal Mágico</div>
+                <small>EVENTO · {commTag}</small>
               </div>
             </a>
 
-            <p className="side-label">NAVEGAÇÃO</p>
+            <p className="side-label">EVENTO DE NATAL</p>
             <nav className="side-nav">
               {tabs.map(([id, icon, name]) => (
                 <a key={id} href={`#${id}`} className={activeTab === id ? 'on' : ''}>
@@ -590,10 +666,10 @@ export default function App() {
               type="button"
               className="btn ghost"
               style={{ width: '100%', justifyContent: 'center' }}
-              onClick={() => navigateTo('/comunidade')}
+              onClick={() => navigateTo(`/comunidade/${communitySlug}`)}
             >
               <Icon name="home" size={16} />
-              <span>Ver todas comunidades</span>
+              <span>Voltar para {commName}</span>
             </button>
           </div>
         </aside>
@@ -606,12 +682,19 @@ export default function App() {
                 type="button"
                 className="crumb-link"
                 onClick={() => navigateTo('/comunidade')}
-                title="Voltar para lista de comunidades"
               >
                 VULPORA
               </button>
               <span className="sep">/</span>
-              <span>{commTag}</span>
+              <button
+                type="button"
+                className="crumb-link"
+                onClick={() => navigateTo(`/comunidade/${communitySlug}`)}
+              >
+                {commTag}
+              </button>
+              <span className="sep">/</span>
+              <span>NATAL 2026</span>
               <span className="sep">/</span>
               <b>{currentTabLabel}</b>
             </div>
