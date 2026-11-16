@@ -11,17 +11,84 @@ import supabase from './db.js';
 import * as missionsMod from './missions.js';
 
 const { MISSIONS, PRIZES, MILESTONES } = missionsMod;
-const MISSIONS_BY_COMMUNITY = missionsMod.MISSIONS_BY_COMMUNITY || {
-  ducks: MISSIONS,
-  kingdom: MISSIONS,
-};
-const PRIZES_BY_COMMUNITY = missionsMod.PRIZES_BY_COMMUNITY || {
-  ducks: PRIZES,
-  kingdom: PRIZES,
-};
-const COMMUNITY_META = missionsMod.COMMUNITY_META || {
-  ducks: { tag: 'DUCKS', name: 'Ducks' },
-  kingdom: { tag: 'THE KINGDOM', name: 'The Kingdom' },
+
+const DEFAULT_COMMUNITY = 'thekingdom';
+
+const COMMUNITIES = {
+  thekingdom: {
+    slug: 'thekingdom',
+    tag: 'THE KINGDOM',
+    name: 'The Kingdom',
+    theme: 'kingdom',
+    subtitle: 'Comunidade oficial · Eventos, desafios e recompensas exclusivas',
+    events: [
+      {
+        id: 'natal-2026',
+        title: 'Natal Mágico 2026',
+        badge: 'AO VIVO AGORA',
+        status: 'live',
+        date: '01 Dez – 25 Dez',
+        description: '25 dias de missões diárias, árvore de cartinhas da comunidade e premiações especiais.',
+        cta: 'Participar agora',
+        target: '#natal-hub',
+      },
+      {
+        id: 'ano-novo-2027',
+        title: 'Virada Real · Ano Novo',
+        badge: 'EM BREVE',
+        status: 'upcoming',
+        date: '28 Dez – 03 Jan',
+        description: 'Retrospectiva do reino, sorteios relâmpago no Discord e insígnia exclusiva de Ano Novo.',
+        cta: 'Avise-me',
+      },
+      {
+        id: 'copa-kingdom',
+        title: 'Torneio das Casas',
+        badge: 'JANEIRO 2027',
+        status: 'upcoming',
+        date: '15 Jan – 30 Jan',
+        description: 'Disputa entre equipes com minigames, desafios criativos e ranking geral da comunidade.',
+        cta: 'Avise-me',
+      },
+    ],
+  },
+  heaven: {
+    slug: 'heaven',
+    tag: 'HEAVEN',
+    name: 'Heaven',
+    theme: 'ducks',
+    subtitle: 'Comunidade oficial Heaven · Eventos, desafios e recompensas exclusivas',
+    events: [
+      {
+        id: 'natal-2026-heaven',
+        title: 'Natal Mágico 2026 · Heaven',
+        badge: 'AO VIVO AGORA',
+        status: 'live',
+        date: '01 Dez – 25 Dez',
+        description: '25 dias de missões diárias, árvore de cartinhas da Heaven e premiações exclusivas.',
+        cta: 'Participar agora',
+        target: '#natal-hub',
+      },
+      {
+        id: 'ano-novo-2027-heaven',
+        title: 'Virada Heaven · Ano Novo',
+        badge: 'EM BREVE',
+        status: 'upcoming',
+        date: '28 Dez – 03 Jan',
+        description: 'Celebração de fim de ano da Heaven com sorteios no Discord e insígnia especial.',
+        cta: 'Avise-me',
+      },
+      {
+        id: 'copa-heaven',
+        title: 'Copa Heaven · Verão 2027',
+        badge: 'JANEIRO 2027',
+        status: 'upcoming',
+        date: '15 Jan – 30 Jan',
+        description: 'Torneio comunitário com minigames, desafios em equipe e ranking da Heaven.',
+        cta: 'Avise-me',
+      },
+    ],
+  },
 };
 
 const {
@@ -34,8 +101,6 @@ const {
   DISCORD_CLIENT_SECRET,
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
-  DUCKS_GUILD_ID = '1472932028721664148',
-  KINGDOM_GUILD_ID = '992981876664971306',
   ADMIN_IDS = '',
   ADMIN_EMAILS = '',
   EVENT_START = '2026-12-01',
@@ -53,6 +118,50 @@ const ADMIN_EMAIL_SET = new Set(
 const SESSION_MS = 30 * 24 * 3600 * 1000;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const run = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+function normalizeSlug(raw) {
+  const clean = String(raw || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '');
+  if (clean === 'ducks') return 'heaven';
+  return clean || DEFAULT_COMMUNITY;
+}
+
+function extractCommunityFromPath(urlOrPath) {
+  const match = String(urlOrPath || '').match(/\/comunidade\/([^/?#]+)/i);
+  return normalizeSlug(match?.[1]);
+}
+
+function getReqCommunity(req) {
+  return normalizeSlug(
+    req.query.community ||
+      req.get('x-community') ||
+      extractCommunityFromPath(req.get('referer'))
+  );
+}
+
+function getCommunityMeta(slug) {
+  const key = normalizeSlug(slug);
+  if (COMMUNITIES[key]) return COMMUNITIES[key];
+  const label = key.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return {
+    slug: key,
+    tag: label.toUpperCase(),
+    name: label,
+    theme: 'kingdom',
+    subtitle: 'Comunidade oficial · Eventos, desafios e recompensas',
+    events: COMMUNITIES[DEFAULT_COMMUNITY].events,
+  };
+}
+
+function safeReturnPath(raw, fallback = '/comunidade') {
+  const val = String(raw || '').trim();
+  if (val === '/') return '/comunidade';
+  if (val.startsWith('/') && !val.startsWith('//')) {
+    return val.replace(/^\/comunidade\/ducks(?=\/|$)/i, '/comunidade/heaven');
+  }
+  return fallback;
+}
 
 const isUserAdmin = (u) =>
   Boolean(
@@ -95,11 +204,7 @@ function getBaseUrl(req) {
   return host ? `${proto}://${host}` : BASE_URL.replace(/\/$/, '');
 }
 
-function getMissionsFor(community) {
-  return MISSIONS_BY_COMMUNITY[community] || MISSIONS;
-}
-
-/* ---------- Dia do evento e liberação do final (26/12) ---------- */
+/* ---------- Dia do evento ---------- */
 function eventState() {
   const dbg = parseInt(DEBUG_DAY, 10);
   if (!PROD && dbg >= 1 && dbg <= 25) return { status: 'live', today: dbg, finale: false };
@@ -110,7 +215,7 @@ function eventState() {
   return { status: 'live', today: diff + 1, finale: false };
 }
 
-/* ---------- Helpers do banco (Supabase · isolados por comunidade) ---------- */
+/* ---------- Helpers do banco (Supabase) ---------- */
 async function getUserStats(uid, community) {
   const { data } = await supabase
     .from('completions')
@@ -135,8 +240,7 @@ async function getDoneDays(uid, community) {
 }
 
 async function giveCompletion(uid, day, community) {
-  const list = getMissionsFor(community);
-  const pts = list[day - 1][2];
+  const pts = MISSIONS[day - 1][2];
   const { data, error } = await supabase
     .from('completions')
     .upsert(
@@ -156,7 +260,7 @@ const avatarUrl = (u) => {
     : null;
 };
 
-/* Verificações automáticas de missão (isoladas na árvore/desafios da comunidade) */
+/* Verificações automáticas de missão */
 const checks = {
   login: async () => true,
   discord: async () => true,
@@ -183,9 +287,9 @@ const checks = {
 };
 
 const checkMsg = {
-  letter: 'Escreva uma cartinha na árvore da sua comunidade primeiro.',
-  reads3: 'Leia 3 cartinhas da árvore da sua comunidade primeiro.',
-  count10: 'Conclua 10 missões da sua comunidade antes desta.',
+  letter: 'Escreva uma cartinha na árvore da comunidade primeiro.',
+  reads3: 'Leia 3 cartinhas da árvore da comunidade primeiro.',
+  count10: 'Conclua 10 missões antes desta.',
 };
 
 /* ---------- App e segurança ---------- */
@@ -217,7 +321,6 @@ app.use(
 app.use(express.json({ limit: '4mb' }));
 app.use(cookieParser());
 
-// Proteção CSRF compatível com Vite local e Vercel
 app.use((req, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   const origin = req.get('origin');
@@ -228,7 +331,6 @@ app.use((req, res, next) => {
   return res.status(403).json({ error: 'origem_invalida' });
 });
 
-// Carrega o usuário da sessão
 app.use(
   run(async (req, res, next) => {
     const sid = req.cookies.sid;
@@ -255,23 +357,25 @@ const strict = rateLimit({ ...limits, windowMs: 60_000, limit: 15, message: { er
 
 const requireAuth = (req, res, next) => (req.user ? next() : res.status(401).json({ error: 'nao_autenticado' }));
 const requireAdmin = (req, res, next) => (req.user?.isAdmin ? next() : res.status(403).json({ error: 'sem_permissao' }));
-const requireCommunity = (req, res, next) =>
-  req.user?.community ? next() : res.status(403).json({ error: 'comunidade_nao_definida' });
 
 app.use('/api', (req, res, next) =>
   req.path === '/me' || req.user ? next() : res.status(401).json({ error: 'nao_autenticado' })
 );
 
-/* ---------- Login com Discord (OAuth2 + Detecção de Servidor) ---------- */
+/* ---------- Login com Discord ---------- */
 app.get('/auth/discord', (req, res) => {
   const state = randomBytes(16).toString('hex');
   const redirectUri = `${getBaseUrl(req)}/auth/discord/callback`;
+  const returnTo = safeReturnPath(req.query.returnTo);
+
   res.cookie('oauth_state', state, { httpOnly: true, sameSite: 'lax', secure: PROD, maxAge: 10 * 60 * 1000 });
+  res.cookie('oauth_return', returnTo, { httpOnly: true, sameSite: 'lax', secure: PROD, maxAge: 10 * 60 * 1000 });
+
   const params = new URLSearchParams({
     client_id: DISCORD_CLIENT_ID ?? '',
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: 'identify guilds',
+    scope: 'identify',
     state,
   });
   res.redirect(`https://discord.com/oauth2/authorize?${params}`);
@@ -282,9 +386,12 @@ app.get(
   run(async (req, res) => {
     const { code, state } = req.query;
     const saved = req.cookies.oauth_state;
+    const returnTo = safeReturnPath(req.cookies.oauth_return);
+    const loginCommunity = extractCommunityFromPath(returnTo);
     const redirectUri = `${getBaseUrl(req)}/auth/discord/callback`;
     res.clearCookie('oauth_state');
-    if (!code || !state || state !== saved) return res.redirect('/?erro=state');
+    res.clearCookie('oauth_return');
+    if (!code || !state || state !== saved) return res.redirect(`${returnTo}?erro=state`);
 
     try {
       const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
@@ -301,72 +408,62 @@ app.get(
       if (!tokenRes.ok) throw new Error(`token ${tokenRes.status}`);
       const { access_token } = await tokenRes.json();
 
-      const [meRes, guildsRes] = await Promise.all([
-        fetch('https://discord.com/api/users/@me', { headers: { Authorization: `Bearer ${access_token}` } }),
-        fetch('https://discord.com/api/users/@me/guilds', { headers: { Authorization: `Bearer ${access_token}` } }),
-      ]);
+      const meRes = await fetch('https://discord.com/api/users/@me', {
+        headers: { Authorization: `Bearer ${access_token}` },
+      });
       if (!meRes.ok) throw new Error(`users/@me ${meRes.status}`);
-      if (!guildsRes.ok) throw new Error(`users/@me/guilds ${guildsRes.status}`);
-
       const d = await meRes.json();
-      const guilds = await guildsRes.json();
-      const guildIds = new Set((guilds || []).map((g) => g.id));
-
-      const inDucks = guildIds.has(DUCKS_GUILD_ID);
-      const inKingdom = guildIds.has(KINGDOM_GUILD_ID);
-      const isAdmin = ADMINS.has(d.id);
-
-      // Bloqueia quem não participa de nenhum dos dois servidores (exceto admins)
-      if (!inDucks && !inKingdom && !isAdmin) {
-        return res.redirect('/?erro=sem_servidor');
-      }
 
       const { data: existing } = await supabase
         .from('users')
-        .select('id, community')
+        .select('id')
         .eq('discord_id', d.id)
         .maybeSingle();
 
-      // Mantém a comunidade já escolhida; senão atribui automaticamente pelo servidor
-      let community = existing?.community || null;
-      if (!community) {
-        if (inDucks && !inKingdom) community = 'ducks';
-        else if (inKingdom && !inDucks) community = 'kingdom';
-        // Se estiver nos dois servidores, community fica null até escolher no site
-      }
-
-      const { data: user, error: uErr } = await supabase
-        .from('users')
-        .upsert(
-          {
+      let userId = existing?.id;
+      if (userId) {
+        const { error: uErr } = await supabase
+          .from('users')
+          .update({
+            username: d.global_name || d.username,
+            avatar: d.avatar,
+          })
+          .eq('id', userId);
+        if (uErr) throw uErr;
+      } else {
+        const { data: created, error: uErr } = await supabase
+          .from('users')
+          .insert({
             discord_id: d.id,
             username: d.global_name || d.username,
             avatar: d.avatar,
-            community,
-          },
-          { onConflict: 'discord_id' }
-        )
-        .select('id')
-        .single();
-      if (uErr) throw uErr;
+            community: loginCommunity,
+          })
+          .select('id')
+          .single();
+        if (uErr) throw uErr;
+        userId = created.id;
+      }
 
-      await createSession(res, user.id);
-      res.redirect('/#perfil');
+      await createSession(res, userId);
+      res.redirect(`${returnTo}#inicio`);
     } catch (e) {
       console.error('Erro no login do Discord:', e.message);
-      res.redirect('/?erro=discord');
+      res.redirect(`${returnTo}?erro=discord`);
     }
   })
 );
 
-/* ---------- Login com Google (OAuth2) ---------- */
+/* ---------- Login com Google ---------- */
 app.get('/auth/google', (req, res) => {
+  const returnTo = safeReturnPath(req.query.returnTo);
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
-    return res.redirect('/?erro=google_config');
+    return res.redirect(`${returnTo}?erro=google_config`);
   }
   const state = randomBytes(16).toString('hex');
   const redirectUri = `${getBaseUrl(req)}/auth/google/callback`;
   res.cookie('oauth_state', state, { httpOnly: true, sameSite: 'lax', secure: PROD, maxAge: 10 * 60 * 1000 });
+  res.cookie('oauth_return', returnTo, { httpOnly: true, sameSite: 'lax', secure: PROD, maxAge: 10 * 60 * 1000 });
 
   const params = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
@@ -384,9 +481,12 @@ app.get(
   run(async (req, res) => {
     const { code, state } = req.query;
     const saved = req.cookies.oauth_state;
+    const returnTo = safeReturnPath(req.cookies.oauth_return);
+    const loginCommunity = extractCommunityFromPath(returnTo);
     const redirectUri = `${getBaseUrl(req)}/auth/google/callback`;
     res.clearCookie('oauth_state');
-    if (!code || !state || state !== saved) return res.redirect('/?erro=state');
+    res.clearCookie('oauth_return');
+    if (!code || !state || state !== saved) return res.redirect(`${returnTo}?erro=state`);
 
     try {
       const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -414,14 +514,14 @@ app.get(
 
       let { data: existing } = await supabase
         .from('users')
-        .select('id, username, avatar, community')
+        .select('id, username, avatar')
         .eq('google_id', g.sub)
         .maybeSingle();
 
       if (!existing) {
         const resByEmail = await supabase
           .from('users')
-          .select('id, username, avatar, community')
+          .select('id, username, avatar')
           .eq('email', email)
           .maybeSingle();
         existing = resByEmail.data;
@@ -447,7 +547,7 @@ app.get(
             email,
             username: displayName,
             avatar: g.picture || null,
-            community: null,
+            community: loginCommunity,
           })
           .select('id')
           .single();
@@ -456,10 +556,10 @@ app.get(
       }
 
       await createSession(res, userId);
-      res.redirect('/#inicio');
+      res.redirect(`${returnTo}#inicio`);
     } catch (e) {
       console.error('Erro no login do Google:', e.message);
-      res.redirect('/?erro=google');
+      res.redirect(`${returnTo}?erro=google`);
     }
   })
 );
@@ -472,6 +572,7 @@ app.post(
     const name = String(req.body?.name ?? '').trim().slice(0, 40);
     const email = String(req.body?.email ?? '').trim().toLowerCase();
     const password = String(req.body?.password ?? '');
+    const loginCommunity = getReqCommunity(req);
 
     if (name.length < 2) {
       return res.status(400).json({ error: 'nome_invalido', message: 'Informe um nome com pelo menos 2 caracteres.' });
@@ -483,11 +584,7 @@ app.post(
       return res.status(400).json({ error: 'senha_curta', message: 'A senha precisa ter pelo menos 6 caracteres.' });
     }
 
-    const { data: exists } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle();
+    const { data: exists } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
     if (exists) {
       return res.status(409).json({ error: 'email_em_uso', message: 'Este e-mail já está cadastrado. Faça login.' });
     }
@@ -498,7 +595,7 @@ app.post(
         email,
         username: name,
         password_hash: hashPassword(password),
-        community: null,
+        community: loginCommunity,
       })
       .select('id')
       .single();
@@ -554,18 +651,34 @@ app.post(
   })
 );
 
-/* ---------- Perfil e Escolha/Troca de Evento ---------- */
+/* ---------- Perfil e Dados da Comunidade ---------- */
 app.get(
   '/api/me',
   run(async (req, res) => {
-    if (!req.user) return res.json({ user: null });
+    const comm = getReqCommunity(req);
+    const meta = getCommunityMeta(comm);
+
+    if (!req.user) {
+      return res.json({ user: null, community: meta });
+    }
+
+app.get(
+  '/api/me',
+  run(async (req, res) => {
+    const comm = getReqCommunity(req);
+    const meta = getCommunityMeta(comm);
+    const communities = Object.values(COMMUNITIES);
+
+    if (!req.user) {
+      return res.json({ user: null, community: meta, communities });
+    }
+
     const ev = eventState();
     const showPoints = Boolean(req.user.isAdmin || ev.finale);
-    const comm = req.user.community;
-    const [s, done] = comm
-      ? await Promise.all([getUserStats(req.user.id, comm), getDoneDays(req.user.id, comm)])
-      : [{ points: 0, missions: 0 }, []];
-    const meta = COMMUNITY_META[comm] || null;
+    const [s, done] = await Promise.all([
+      getUserStats(req.user.id, comm),
+      getDoneDays(req.user.id, comm),
+    ]);
     const provider = req.user.discord_id ? 'discord' : req.user.google_id ? 'google' : 'email';
 
     res.json({
@@ -578,9 +691,11 @@ app.get(
         discord: { connected: Boolean(req.user.discord_id), id: req.user.discord_id },
         isAdmin: req.user.isAdmin,
         community: comm,
-        tag: meta?.tag || null,
-        communityName: meta?.name || null,
+        tag: meta.tag,
+        communityName: meta.name,
       },
+      community: meta,
+      communities,
       points: showPoints ? s.points : null,
       showPoints,
       missionsDone: s.missions,
@@ -589,32 +704,14 @@ app.get(
   })
 );
 
-// Permite que qualquer participante alterne entre o evento da Ducks e da The Kingdom
-app.post(
-  '/api/me/community',
-  requireAuth,
-  run(async (req, res) => {
-    const choice = req.body?.community;
-    if (!['ducks', 'kingdom'].includes(choice)) {
-      return res.status(400).json({ error: 'comunidade_invalida' });
-    }
-    const { error } = await supabase.from('users').update({ community: choice }).eq('id', req.user.id);
-    if (error) throw error;
-    res.json({ ok: true, community: choice });
-  })
-);
-
-/* ---------- Evento e missões (separados por comunidade) ---------- */
+/* ---------- Evento e missões ---------- */
 app.get(
   '/api/event',
   run(async (req, res) => {
     const ev = eventState();
-    const community = req.user?.community;
-    if (!community) {
-      return res.json({ status: ev.status, today: ev.today, finale: ev.finale, start: EVENT_START, community: null, missions: [] });
-    }
+    const community = getReqCommunity(req);
+    const meta = getCommunityMeta(community);
 
-    const list = getMissionsFor(community);
     const subs = new Map();
     const [doneDays, { data: subRows }] = await Promise.all([
       getDoneDays(req.user.id, community),
@@ -628,7 +725,7 @@ app.get(
     (subRows || []).forEach((s) => subs.set(s.day, s.status));
 
     const showPoints = Boolean(req.user?.isAdmin || ev.finale);
-    const missions = list.map(([title, objective, points, verify], i) => {
+    const missions = MISSIONS.map(([title, objective, points, verify], i) => {
       const day = i + 1;
       let status;
       if (done.has(day)) status = 'done';
@@ -646,7 +743,15 @@ app.get(
       };
     });
 
-    res.json({ status: ev.status, today: ev.today, finale: ev.finale, start: EVENT_START, community, missions });
+    res.json({
+      status: ev.status,
+      today: ev.today,
+      finale: ev.finale,
+      start: EVENT_START,
+      community,
+      communityMeta: meta,
+      missions,
+    });
   })
 );
 
@@ -654,12 +759,10 @@ app.post(
   '/api/missions/:day/complete',
   strict,
   requireAuth,
-  requireCommunity,
   run(async (req, res) => {
     const day = parseInt(req.params.day, 10);
-    const community = req.user.community;
-    const list = getMissionsFor(community);
-    const m = list[day - 1];
+    const community = getReqCommunity(req);
+    const m = MISSIONS[day - 1];
     if (!m) return res.status(404).json({ error: 'missao_inexistente' });
 
     const ev = eventState();
@@ -718,21 +821,17 @@ app.post(
   })
 );
 
-/* ---------- Ranking e prêmios (isolados por comunidade) ---------- */
+/* ---------- Ranking e Prêmios da Comunidade ---------- */
 app.get(
   '/api/ranking',
   requireAuth,
-  requireCommunity,
   run(async (req, res) => {
-    const ev = eventState();
-    if (!req.user.isAdmin && !ev.finale) {
-      return res.status(403).json({ error: 'ranking_oculto', message: 'O ranking será revelado no dia 26!' });
-    }
+    const community = getReqCommunity(req);
+    const meta = getCommunityMeta(community);
 
-    const community = req.user.community;
     const { data: rows } = await supabase
       .from('completions')
-      .select('user_id, points, created_at, users!inner(username, discord_id, avatar, community)')
+      .select('user_id, points, created_at, users!inner(username, discord_id, avatar)')
       .eq('community', community);
 
     const map = new Map();
@@ -743,7 +842,6 @@ app.get(
         name: r.users.username,
         discord_id: r.users.discord_id,
         avatar: r.users.avatar,
-        community,
         total: 0,
         missions: 0,
         last: r.created_at,
@@ -759,7 +857,7 @@ app.get(
       position: i + 1,
       name: r.name,
       avatar: avatarUrl(r),
-      tag: COMMUNITY_META[r.community]?.tag,
+      tag: meta.tag,
       points: r.total,
       missions: r.missions,
     }));
@@ -773,21 +871,14 @@ app.get(
 );
 
 app.get('/api/prizes', requireAuth, (req, res) => {
-  const ev = eventState();
-  if (!req.user.isAdmin && !ev.finale) {
-    return res.status(403).json({ error: 'premios_ocultos', message: 'As premiações abrem no dia 26!' });
-  }
-  const community = req.user.community || 'ducks';
-  res.json({ prizes: PRIZES_BY_COMMUNITY[community] || PRIZES, milestones: MILESTONES });
+  res.json({ prizes: PRIZES, milestones: MILESTONES });
 });
 
-/* ---------- Árvore de cartinhas (isolada por comunidade) ---------- */
+/* ---------- Árvore de cartinhas ---------- */
 app.get(
   '/api/letters',
   run(async (req, res) => {
-    const community = req.user?.community;
-    if (!community) return res.json({ letters: [] });
-
+    const community = getReqCommunity(req);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 12, 1), 60);
     const { data } = await supabase
       .from('letters')
@@ -809,8 +900,8 @@ app.post(
   '/api/letters',
   strict,
   requireAuth,
-  requireCommunity,
   run(async (req, res) => {
+    const community = getReqCommunity(req);
     const text = String(req.body?.text ?? '')
       .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
       .trim();
@@ -823,7 +914,7 @@ app.post(
       .from('letters')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', req.user.id)
-      .eq('community', req.user.community)
+      .eq('community', community)
       .gt('created_at', since);
 
     if ((count || 0) >= 3) {
@@ -833,7 +924,7 @@ app.post(
     const author = req.body?.anonymous ? 'Anônimo' : req.user.username;
     const { data: created, error } = await supabase
       .from('letters')
-      .insert({ user_id: req.user.id, author, text, community: req.user.community })
+      .insert({ user_id: req.user.id, author, text, community })
       .select('id, author, text')
       .single();
     if (error) throw error;
@@ -845,10 +936,9 @@ app.post(
 app.post(
   '/api/letters/:id/read',
   requireAuth,
-  requireCommunity,
   run(async (req, res) => {
     const id = parseInt(req.params.id, 10);
-    const community = req.user.community;
+    const community = getReqCommunity(req);
     const { data: l } = await supabase
       .from('letters')
       .select('user_id')
@@ -872,13 +962,12 @@ app.post(
   })
 );
 
-/* ---------- Galeria de Artes (isolada por comunidade) ---------- */
+/* ---------- Galeria de Artes ---------- */
 app.get(
   '/api/gallery',
   requireAuth,
   run(async (req, res) => {
-    const community = req.user?.community;
-    if (!community) return res.json({ items: [] });
+    const community = getReqCommunity(req);
 
     let query = supabase
       .from('gallery')
@@ -914,8 +1003,8 @@ app.post(
   '/api/gallery',
   strict,
   requireAuth,
-  requireCommunity,
   run(async (req, res) => {
+    const community = getReqCommunity(req);
     const title = String(req.body?.title ?? '').trim().slice(0, 80);
     const message = String(req.body?.message ?? '').trim().slice(0, 300);
     const rawImage = String(req.body?.imageUrl ?? '');
@@ -931,7 +1020,7 @@ app.post(
     const contentType = match[1];
     const ext = contentType.split('/')[1] === 'jpeg' ? 'jpg' : contentType.split('/')[1];
     const buffer = Buffer.from(match[2], 'base64');
-    const filePath = `${req.user.community}/${req.user.id}/${Date.now()}-${randomBytes(4).toString('hex')}.${ext}`;
+    const filePath = `${community}/${req.user.id}/${Date.now()}-${randomBytes(4).toString('hex')}.${ext}`;
 
     const { error: upErr } = await supabase.storage
       .from('gallery')
@@ -950,7 +1039,7 @@ app.post(
         message,
         image_url: pub.publicUrl,
         status: 'pending',
-        community: req.user.community,
+        community,
       })
       .select('id, status')
       .single();
@@ -976,25 +1065,22 @@ app.patch(
   })
 );
 
-/* ---------- Admin (Missões e Cartinhas) ---------- */
+/* ---------- Admin ---------- */
 app.get(
   '/api/admin/submissions',
   requireAuth,
   requireAdmin,
   run(async (req, res) => {
+    const community = getReqCommunity(req);
     const status = req.query.status === 'rejected' ? 'rejected' : 'pending';
-    let query = supabase
+
+    const { data } = await supabase
       .from('submissions')
-      .select('id, day, proof, status, community, created_at, users(username, discord_id, community)')
+      .select('id, day, proof, status, community, created_at, users(username, discord_id)')
       .eq('status', status)
+      .eq('community', community)
       .order('id')
       .limit(100);
-
-    if (req.user.community) {
-      query = query.eq('community', req.user.community);
-    }
-
-    const { data } = await query;
 
     const submissions = (data || []).map((s) => ({
       id: s.id,
@@ -1004,7 +1090,7 @@ app.get(
       created_at: s.created_at,
       username: s.users?.username,
       discord_id: s.users?.discord_id,
-      community: s.community || s.users?.community,
+      community: s.community || community,
     }));
     res.json({ submissions });
   })
@@ -1019,11 +1105,7 @@ app.post(
     if (!['approve', 'reject'].includes(action)) return res.status(404).json({ error: 'acao_invalida' });
     const id = parseInt(req.params.id, 10);
 
-    const { data: s } = await supabase
-      .from('submissions')
-      .select('*, users(community)')
-      .eq('id', id)
-      .maybeSingle();
+    const { data: s } = await supabase.from('submissions').select('*').eq('id', id).maybeSingle();
     if (!s || s.status !== 'pending') return res.status(404).json({ error: 'nao_encontrada' });
 
     await supabase
@@ -1031,7 +1113,7 @@ app.post(
       .update({ status: action === 'approve' ? 'approved' : 'rejected' })
       .eq('id', s.id);
     if (action === 'approve') {
-      await giveCompletion(s.user_id, s.day, s.community || s.users?.community || 'ducks');
+      await giveCompletion(s.user_id, s.day, s.community || DEFAULT_COMMUNITY);
     }
     res.json({ ok: true });
   })
@@ -1048,15 +1130,27 @@ app.delete(
   })
 );
 
-/* ---------- Site, erros e start ---------- */
+/* ---------- Site, rotas /comunidade/:slug/natal e start ---------- */
+/* ---------- Site, rotas /comunidade/:slug/natal e start ---------- */
 app.get('/healthz', (req, res) => res.json({ ok: true }));
-app.get('/', (req, res, next) =>
-  existsSync(path.join(__dirname, 'public', 'index.html'))
-    ? next()
-    : res.type('html').send('<h1>Servidor no ar, mas falta o build em public/index.html</h1>')
-);
-app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api', (req, res) => res.status(404).json({ error: 'rota_inexistente' }));
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get(/^\/comunidade\/ducks(\/.*)?$/i, (req, res) => {
+  res.redirect('/comunidade/heaven/natal');
+});
+
+app.get('/comunidade/:slug', (req, res) => {
+  res.redirect(`/comunidade/${normalizeSlug(req.params.slug)}/natal`);
+});
+
+app.get(['/', '/comunidade', '/comunidade/', /^\/comunidade\/[^/]+\/natal(\/.*)?$/i], (req, res) => {
+  const indexFile = path.join(__dirname, 'public', 'index.html');
+  if (existsSync(indexFile)) {
+    return res.sendFile(indexFile);
+  }
+  res.type('html').send('<h1>Servidor no ar, mas falta o build em public/index.html</h1>');
+});
 
 app.use((err, req, res, next) => {
   console.error(err);
@@ -1067,7 +1161,12 @@ if (!VERCEL) {
   setInterval(() => supabase.from('sessions').delete().lt('expires_at', Date.now()), 3600_000).unref();
   const server = app.listen(PORT, () => {
     const ev = eventState();
-    console.log(`\nNatal Mágico no ar! Abra: http://localhost:${PORT} (Evento: ${ev.status}, dia ${ev.today})\n`);
+    console.log(
+      `\nNatal Mágico no ar!\n` +
+      `• The Kingdom: http://localhost:${PORT}/comunidade/thekingdom/natal\n` +
+      `• Heaven:      http://localhost:${PORT}/comunidade/heaven/natal\n` +
+      `(Evento: ${ev.status}, dia ${ev.today})\n`
+    );
   });
   server.on('error', (e) => {
     console.error(e.code === 'EADDRINUSE' ? `A porta ${PORT} já está em uso.` : `Erro ao iniciar: ${e.message}`);

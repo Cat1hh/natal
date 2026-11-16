@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from './api.js';
+import { api, getCommunityBasePath, getCommunitySlug, isPortalPath } from './api.js';
 import { Tree, Snow, Burst } from './tree.jsx';
 import { Icon } from './icons.jsx';
 import {
   Avatar,
   CommunityTag,
-  ChooseCommunity,
+  CommunitiesHub,
   Login,
   Home,
   Calendar,
@@ -21,6 +21,30 @@ import {
   RulesPage,
   SupportPage,
 } from './views.jsx';
+
+const DEFAULT_COMMUNITIES = [
+  {
+    slug: 'thekingdom',
+    tag: 'THE KINGDOM',
+    name: 'The Kingdom',
+    theme: 'kingdom',
+    subtitle: 'Comunidade oficial · Eventos, desafios e recompensas exclusivas',
+  },
+  {
+    slug: 'heaven',
+    tag: 'HEAVEN',
+    name: 'Heaven',
+    theme: 'ducks',
+    subtitle: 'Comunidade oficial Heaven · Eventos, desafios e recompensas exclusivas',
+  },
+];
+
+function getFallbackMeta(slug) {
+  if (slug === 'heaven') {
+    return DEFAULT_COMMUNITIES[1];
+  }
+  return DEFAULT_COMMUNITIES[0];
+}
 
 function useHash() {
   const get = () => location.hash.slice(1) || 'inicio';
@@ -62,7 +86,7 @@ function Side({ rk, pz, done, showPrizes }) {
       ) : (
         <h3 className="ico-title" style={{ marginTop: 0, marginBottom: 10 }}>
           <Icon name="trophy" size={20} />
-          <span>Ranking (Admin)</span>
+          <span>Ranking da Comunidade</span>
         </h3>
       )}
       {t === 'rk' || !showPrizes ? <Ranking rk={rk} /> : <Prizes pz={pz} done={done} />}
@@ -71,16 +95,12 @@ function Side({ rk, pz, done, showPrizes }) {
 }
 
 /* ---------- Página Exclusiva da Árvore ---------- */
-export function TreePage({ letters = [], community, onOpen, onWrite }) {
+export function TreePage({ letters = [], communityMeta, onOpen, onWrite }) {
   const [page, setPage] = useState(0);
   const total = letters.length;
   const pages = Math.max(1, Math.ceil(total / 12));
   const current = page % pages;
   const visible = letters.slice(current * 12, current * 12 + 12);
-
-  useEffect(() => {
-    setPage(0);
-  }, [community]);
 
   const openRandom = () => {
     if (!total) return;
@@ -93,13 +113,11 @@ export function TreePage({ letters = [], community, onOpen, onWrite }) {
       <div className="tree-head">
         <div>
           <p className="eyebrow">
-            Correio de Natal · {community === 'kingdom' ? 'THE KINGDOM' : 'DUCKS'}
+            Correio de Natal · {communityMeta?.tag || 'COMUNIDADE'}
           </p>
           <div className="who-name">
-            <h2 style={{ margin: 0 }}>
-              Árvore {community === 'kingdom' ? 'da The Kingdom' : 'da Ducks'}
-            </h2>
-            <CommunityTag community={community} />
+            <h2 style={{ margin: 0 }}>Árvore de {communityMeta?.name || 'Comunidade'}</h2>
+            <CommunityTag tag={communityMeta?.tag} theme={communityMeta?.theme} />
           </div>
           <p className="m">
             Toque em qualquer envelope pendurado nos galhos para ler uma mensagem ou deixe a sua.
@@ -160,7 +178,13 @@ export function TreePage({ letters = [], community, onOpen, onWrite }) {
 
 export default function App() {
   const route = useHash(), wide = useWide();
+  const [pathname, setPathname] = useState(() => window.location.pathname);
+  const portal = isPortalPath(pathname);
+  const communitySlug = getCommunitySlug(pathname);
+
   const [me, setMe] = useState(undefined);
+  const [communities, setCommunities] = useState(DEFAULT_COMMUNITIES);
+  const [communityMeta, setCommunityMeta] = useState(null);
   const [netErr, setNetErr] = useState('');
   const [ev, setEv] = useState(null);
   const [rk, setRk] = useState(null);
@@ -172,6 +196,32 @@ export default function App() {
   const [burst, setBurst] = useState(0);
   const toastTimer = useRef(null);
 
+  const navigateTo = useCallback((nextPath) => {
+    window.history.pushState(null, '', nextPath);
+    setPathname(nextPath.split('#')[0]);
+    if (nextPath.includes('#')) {
+      window.location.hash = nextPath.split('#')[1];
+    } else {
+      window.history.replaceState(null, '', nextPath);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  useEffect(() => {
+    const onPop = () => setPathname(window.location.pathname);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  // Normaliza /comunidade/ducks -> /comunidade/heaven/natal
+  useEffect(() => {
+    if (/^\/comunidade\/ducks(\/|$)/i.test(pathname)) {
+      const target = getCommunityBasePath(pathname);
+      window.history.replaceState(null, '', `${target}${window.location.search}${window.location.hash}`);
+      setPathname(target);
+    }
+  }, [pathname]);
+
   const say = useCallback((t) => {
     setToast(t);
     clearTimeout(toastTimer.current);
@@ -181,15 +231,25 @@ export default function App() {
   const load = useCallback(async () => {
     setNetErr('');
     const m = await api.me();
+    if (m.communities?.length) setCommunities(m.communities);
+    if (m.community) setCommunityMeta(m.community);
     if (!m.user) return setMe(null);
+
+    setMe(m);
+
+    // Se estiver na vitrine (/ ou /comunidade), não precisa carregar dados de evento específico ainda
+    if (isPortalPath(window.location.pathname)) {
+      setEv(null);
+      return;
+    }
+
     const [e, r, p, l, g] = await Promise.all([
       api.event(),
-      api.ranking().catch(() => null),
+      api.ranking().catch(() => ({ ranking: [], me: null })),
       api.prizes().catch(() => null),
       api.letters(),
       api.gallery ? api.gallery().catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
     ]);
-    setMe(m);
     setEv(e);
     setRk(r);
     setPz(p);
@@ -202,17 +262,20 @@ export default function App() {
       setNetErr('Não foi possível conectar ao servidor. Verifique se o backend está rodando.');
       setMe(null);
     });
-  }, [load]);
+  }, [load, pathname]);
 
-  // Aplica a paleta de cores da comunidade (Ducks ou The Kingdom) automaticamente
+  const activeMeta = portal ? null : (communityMeta || getFallbackMeta(communitySlug));
+  const commName = activeMeta?.name || 'Vulpora';
+  const commTag = activeMeta?.tag || 'COMUNIDADES';
+
   useEffect(() => {
-    const comm = me?.user?.community || '';
-    if (comm) {
-      document.documentElement.dataset.community = comm;
+    if (portal) {
+      document.documentElement.dataset.community = 'kingdom';
     } else {
-      delete document.documentElement.dataset.community;
+      document.documentElement.dataset.community =
+        activeMeta?.theme || (communitySlug === 'heaven' ? 'ducks' : 'kingdom');
     }
-  }, [me?.user?.community]);
+  }, [portal, activeMeta?.theme, communitySlug]);
 
   useEffect(() => {
     const f = (e) => e.key === 'Escape' && setModal(null);
@@ -225,39 +288,19 @@ export default function App() {
   );
   const now = new Date();
   const isFinale = Boolean(ev?.finale || (now.getMonth() === 11 && now.getDate() >= 26));
-  const canSeeRanking = isAdmin || isFinale;
-  const canSeePrizes = isFinale;
+  const canSeePrizes = isAdmin || isFinale;
 
   const tabs = [
-    ['inicio', 'home', 'Início'],
+    ['inicio', 'home', 'Comunidade'],
     ['arvore', 'tree', 'Árvore de Natal'],
     ['calendario', 'calendar', 'Calendário'],
+    ['ranking', 'trophy', 'Ranking'],
     ['galeria', 'gallery', 'Galeria'],
     ['regras', 'rules', 'Regras'],
     ['suporte', 'support', 'Suporte'],
-    ...(canSeeRanking ? [['ranking', 'trophy', 'Ranking']] : []),
     ...(canSeePrizes ? [['premios', 'gift', 'Premiações']] : []),
     ['perfil', 'user', 'Perfil'],
   ];
-
-  const selectCommunity = async (community) => {
-    if (community === me?.user?.community) return;
-    try {
-      const res = await fetch('/api/me/community', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ community }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.message || 'Erro ao trocar de evento.');
-      setModal(null);
-      say(`Você entrou no evento ${community === 'kingdom' ? 'The Kingdom' : 'Ducks'}!`);
-      await load();
-    } catch (e) {
-      say(e.message);
-    }
-  };
 
   const complete = async (day, proof) => {
     try {
@@ -314,7 +357,7 @@ export default function App() {
             message: payload.message,
             imageUrl: payload.imageUrl,
             status: 'pending',
-            authorId: me?.user?.id || me?.user?._id || me?.user?.discordId,
+            authorId: me?.user?.id,
             authorName: me?.user?.name,
           },
           ...prev,
@@ -364,48 +407,127 @@ export default function App() {
   const openMission = (m) => setModal({ t: 'mission', day: m.day });
 
   const activeTab = tabs.find(([id]) => id === route) ? route : 'inicio';
-  const currentTabLabel = tabs.find(([id]) => id === activeTab)?.[2] || 'Início';
+  const currentTabLabel = tabs.find(([id]) => id === activeTab)?.[2] || 'Comunidade';
 
-  let view;
-  if (me === undefined) view = <p className="m center pad">Acendendo as luzes…</p>;
-  else if (!me) view = <Login erro={netErr || new URLSearchParams(location.search).get('erro')} />;
-  else if (!me.user.community) view = <ChooseCommunity onSelect={selectCommunity} />;
-  else if (!ev) view = <p className="m center pad">Carregando…</p>;
-  else {
-    view =
-      activeTab === 'arvore' ? (
-        <TreePage
-          letters={letters}
-          community={me.user.community}
-          onOpen={openLetter}
-          onWrite={() => setModal({ t: 'write' })}
-        />
-      ) :
-      activeTab === 'calendario' ? <Calendar ev={ev} onMission={openMission} /> :
-      activeTab === 'galeria' ? (
-        <GalleryPage
-          items={gallery}
-          me={me}
-          isAdmin={isAdmin}
-          onOpenForm={() => setModal({ t: 'gallery-new' })}
-          onReview={reviewArt}
-          onInspect={(art) => setModal({ t: 'gallery-view', art })}
-        />
-      ) :
-      activeTab === 'regras' ? <RulesPage /> :
-      activeTab === 'suporte' ? <SupportPage /> :
-      activeTab === 'ranking' && canSeeRanking ? <section className="glass hot"><h2>Ranking do Natal</h2><Ranking rk={rk} /></section> :
-      activeTab === 'premios' && canSeePrizes ? <section className="glass hot"><h2>Premiações</h2><Prizes pz={pz} done={me.missionsDone} /></section> :
-      activeTab === 'perfil' ? (
-        <Profile
-          me={me}
-          rk={canSeeRanking ? rk : null}
-          onLogout={logout}
-          onSwitchCommunity={selectCommunity}
-        />
-      ) :
-      <Home me={me} ev={ev} letters={letters} onOpen={openLetter} onWrite={() => setModal({ t: 'write' })} onMission={openMission} />;
+  // 1. Carregando sessão
+  if (me === undefined) {
+    return (
+      <>
+        <div className="aurora" aria-hidden="true"><i /><i /><i /></div>
+        <Snow />
+        <div className="wrap">
+          <main><p className="m center pad">Acendendo as luzes…</p></main>
+        </div>
+      </>
+    );
   }
+
+  // 2. Não logado -> Sempre exige Login primeiro (Google, Discord ou E-mail)
+  if (!me) {
+    return (
+      <>
+        <div className="aurora" aria-hidden="true"><i /><i /><i /></div>
+        <Snow />
+        <div className="wrap">
+          <header className="solo">
+            <div className="brand">{portal ? 'Vulpora · Comunidades' : `${commName} · Natal`}</div>
+          </header>
+          <main>
+            <Login
+              erro={netErr || new URLSearchParams(location.search).get('erro')}
+              communityMeta={activeMeta}
+              isPortal={portal}
+            />
+          </main>
+        </div>
+      </>
+    );
+  }
+
+  // 3. Logado e na página inicial (/ ou /comunidade) -> Mostra as comunidades para escolher
+  if (portal) {
+    return (
+      <>
+        <div className="aurora" aria-hidden="true"><i /><i /><i /></div>
+        <Snow />
+        <div className="wrap">
+          <header className="solo portal-header">
+            <div className="brand">Vulpora · Comunidades</div>
+            <div className="topbar-right">
+              <div className="chip">
+                <Avatar u={me.user} />
+                <span className="uname">{me.user.name}</span>
+              </div>
+              <button type="button" className="btn ghost btn-sm" onClick={logout}>
+                Sair
+              </button>
+            </div>
+          </header>
+          <main>
+            <CommunitiesHub
+              user={me.user}
+              communities={communities}
+              onSelect={(slug) => navigateTo(`/comunidade/${slug}/natal#inicio`)}
+            />
+          </main>
+        </div>
+        {toast && <div className="toast" role="status">{toast}</div>}
+      </>
+    );
+  }
+
+  // 4. Logado dentro de uma comunidade (/comunidade/:slug/natal)
+  const view = !ev ? (
+    <p className="m center pad">Carregando comunidade…</p>
+  ) : activeTab === 'arvore' ? (
+    <TreePage
+      letters={letters}
+      communityMeta={activeMeta}
+      onOpen={openLetter}
+      onWrite={() => setModal({ t: 'write' })}
+    />
+  ) : activeTab === 'calendario' ? (
+    <Calendar ev={ev} communityMeta={activeMeta} onMission={openMission} />
+  ) : activeTab === 'galeria' ? (
+    <GalleryPage
+      items={gallery}
+      me={me}
+      communityMeta={activeMeta}
+      isAdmin={isAdmin}
+      onOpenForm={() => setModal({ t: 'gallery-new' })}
+      onReview={reviewArt}
+      onInspect={(art) => setModal({ t: 'gallery-view', art })}
+    />
+  ) : activeTab === 'regras' ? (
+    <RulesPage />
+  ) : activeTab === 'suporte' ? (
+    <SupportPage />
+  ) : activeTab === 'ranking' ? (
+    <section className="glass hot">
+      <p className="eyebrow">{commTag} · CLASSIFICAÇÃO</p>
+      <h2>Ranking da Comunidade</h2>
+      <Ranking rk={rk || { ranking: [] }} />
+    </section>
+  ) : activeTab === 'premios' && canSeePrizes ? (
+    <section className="glass hot">
+      <h2>Premiações</h2>
+      <Prizes pz={pz} done={me.missionsDone} />
+    </section>
+  ) : activeTab === 'perfil' ? (
+    <Profile me={me} communityMeta={activeMeta} onLogout={logout} />
+  ) : (
+    <Home
+      me={me}
+      ev={ev}
+      rk={rk}
+      communityMeta={activeMeta}
+      letters={letters}
+      onOpen={openLetter}
+      onWrite={() => setModal({ t: 'write' })}
+      onMission={openMission}
+      onNotify={(msg) => say(msg)}
+    />
+  );
 
   const activeMission = modal?.t === 'mission'
     ? ev?.missions?.find((x) => x.day === modal.day) ?? ev?.missions?.[modal.day - 1]
@@ -420,121 +542,100 @@ export default function App() {
     <LetterModal l={modal.l} />;
 
   const showRightWidget =
-    me && me.user.community && ev && wide && canSeeRanking && rk && activeTab !== 'ranking' && activeTab !== 'premios';
+    me && ev && wide && rk && activeTab !== 'ranking' && activeTab !== 'premios' && activeTab !== 'inicio';
 
   return (
     <>
       <div className="aurora" aria-hidden="true"><i /><i /><i /></div>
       <Snow />
 
-      {!me ? (
-        <div className="wrap">
-          <header className="solo">
-            <div className="brand">Natal Mágico</div>
-          </header>
-          <main>{view}</main>
-        </div>
-      ) : (
-        <div className="app-shell">
-          <aside className="sidebar" aria-label="Navegação principal">
-            <div>
-              <a href="#inicio" className="side-brand">
-                <span className="side-emblem">
-                  <Icon name="sparkles" size={18} />
-                </span>
-                <div>
-                  <div className="brand">Natal Mágico</div>
-                  <small>FESTIVAL DE NATAL · 2026</small>
-                </div>
-              </a>
-
-              <p className="side-label">O FESTIVAL</p>
-              <nav className="side-nav">
-                {tabs.map(([id, icon, name]) => (
-                  <a key={id} href={`#${id}`} className={activeTab === id ? 'on' : ''}>
-                    <span className="nav-ico" aria-hidden="true">
-                      <Icon name={icon} size={18} />
-                    </span>
-                    <span>{name}</span>
-                  </a>
-                ))}
-              </nav>
-            </div>
-
-            <div className="side-foot">
-              <div className="side-progress">
-                <div className="side-prog-top">
-                  <span>Seu progresso</span>
-                  <b>{me.missionsDone}/25</b>
-                </div>
-                <div className="bar mini">
-                  <i style={{ width: `${(me.missionsDone / 25) * 100}%` }} />
-                </div>
+      <div className="app-shell">
+        <aside className="sidebar" aria-label="Navegação principal">
+          <div>
+            <a href="#inicio" className="side-brand">
+              <span className="side-emblem">
+                <Icon name="sparkles" size={18} />
+              </span>
+              <div>
+                <div className="brand">{commName}</div>
+                <small>COMUNIDADE · NATAL 2026</small>
               </div>
+            </a>
 
-              <div className="side-season">
-                <span className="season-star">
-                  <Icon name="snowflake" size={18} />
-                </span>
-                <strong>Advento 2026</strong>
-                <p>25 dias para sentir a magia, no seu ritmo.</p>
-              </div>
-            </div>
-          </aside>
-
-          <div className="main-area">
-            <header className="topbar">
-              <div className="crumb">
-                <span className="dot" />
-                <span>NATAL MÁGICO</span>
-                <span className="sep">/</span>
-                <b>{currentTabLabel}</b>
-              </div>
-
-              <div className="topbar-right">
-                {me.user.community && (
-                  <div className="event-switch" role="group" aria-label="Alternar evento">
-                    <button
-                      type="button"
-                      className={`ev-btn ducks ${me.user.community === 'ducks' ? 'on' : ''}`}
-                      onClick={() => selectCommunity('ducks')}
-                      title="Participar do evento da Ducks"
-                    >
-                      <i className="comm-dot" />
-                      <span>Ducks</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`ev-btn kingdom ${me.user.community === 'kingdom' ? 'on' : ''}`}
-                      onClick={() => selectCommunity('kingdom')}
-                      title="Participar do evento da The Kingdom"
-                    >
-                      <i className="comm-dot" />
-                      <span>The Kingdom</span>
-                    </button>
-                  </div>
-                )}
-
-                <a href="#perfil" className="chip" title="Ver perfil">
-                  <Avatar u={me.user} />
-                  <span className="uname">{me.user.name}</span>
-                  <CommunityTag community={me.user.community} />
-                  {me.points != null && <span>· {me.points} pts</span>}
+            <p className="side-label">NAVEGAÇÃO</p>
+            <nav className="side-nav">
+              {tabs.map(([id, icon, name]) => (
+                <a key={id} href={`#${id}`} className={activeTab === id ? 'on' : ''}>
+                  <span className="nav-ico" aria-hidden="true">
+                    <Icon name={icon} size={18} />
+                  </span>
+                  <span>{name}</span>
                 </a>
-              </div>
-            </header>
+              ))}
+            </nav>
+          </div>
 
-            <div className={showRightWidget ? 'layout' : ''}>
-              <main>{view}</main>
-              {showRightWidget && (
-                <aside className="side">
-                  <Side rk={rk} pz={pz} done={me.missionsDone} showPrizes={canSeePrizes} />
-                </aside>
-              )}
+          <div className="side-foot">
+            <div className="side-progress">
+              <div className="side-prog-top">
+                <span>Progresso Natal</span>
+                <b>{me.missionsDone}/25</b>
+              </div>
+              <div className="bar mini">
+                <i style={{ width: `${(me.missionsDone / 25) * 100}%` }} />
+              </div>
             </div>
+
+            <button
+              type="button"
+              className="btn ghost"
+              style={{ width: '100%', justifyContent: 'center' }}
+              onClick={() => navigateTo('/comunidade')}
+            >
+              <Icon name="home" size={16} />
+              <span>Ver todas comunidades</span>
+            </button>
+          </div>
+        </aside>
+
+        <div className="main-area">
+          <header className="topbar">
+            <div className="crumb">
+              <span className="dot" />
+              <button
+                type="button"
+                className="crumb-link"
+                onClick={() => navigateTo('/comunidade')}
+                title="Voltar para lista de comunidades"
+              >
+                VULPORA
+              </button>
+              <span className="sep">/</span>
+              <span>{commTag}</span>
+              <span className="sep">/</span>
+              <b>{currentTabLabel}</b>
+            </div>
+
+            <div className="topbar-right">
+              <a href="#perfil" className="chip" title="Ver perfil">
+                <Avatar u={me.user} />
+                <span className="uname">{me.user.name}</span>
+                <CommunityTag tag={commTag} theme={activeMeta?.theme} />
+                {me.points != null && <span>· {me.points} pts</span>}
+              </a>
+            </div>
+          </header>
+
+          <div className={showRightWidget ? 'layout' : ''}>
+            <main>{view}</main>
+            {showRightWidget && (
+              <aside className="side">
+                <Side rk={rk} pz={pz} done={me.missionsDone} showPrizes={canSeePrizes} />
+              </aside>
+            )}
           </div>
         </div>
-      )}
+      </div>
 
       {modal && (
         <div className="ov" onClick={() => setModal(null)}>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Tree } from './tree.jsx';
 import { Icon } from './icons.jsx';
+import { getCommunityBasePath } from './api.js';
 
 const MEDAL_COLOR = ['#F4A51D', '#E2D8CE', '#C87D3B'];
 
@@ -148,70 +149,151 @@ export const Avatar = ({ u, big }) => {
   );
 };
 
-export function CommunityTag({ community }) {
-  if (!community) return null;
-  const isKingdom = community === 'kingdom';
+export function CommunityTag({ tag, theme }) {
+  if (!tag) return null;
+  const isDucksTheme = theme === 'ducks' || tag === 'HEAVEN';
   return (
-    <span className={`comm-tag ${isKingdom ? 'kingdom' : 'ducks'}`}>
+    <span className={`comm-tag ${isDucksTheme ? 'ducks' : 'kingdom'}`}>
       <i className="comm-dot" />
-      <span>{isKingdom ? 'THE KINGDOM' : 'DUCKS'}</span>
+      <span>{tag}</span>
     </span>
   );
 }
 
-/* ---------- Escolha inicial de evento ---------- */
-export function ChooseCommunity({ onSelect }) {
-  const [busy, setBusy] = useState(false);
-
-  const pick = async (community) => {
-    if (busy) return;
-    setBusy(true);
+/* ---------- Carrossel de Eventos Futuros & Ativos ---------- */
+export function EventsCarousel({ events = [], onNotify }) {
+  const [index, setIndex] = useState(0);
+  const [reminded, setReminded] = useState(() => {
     try {
-      await onSelect(community);
-    } finally {
-      setBusy(false);
+      return JSON.parse(localStorage.getItem('vulpora_event_reminders') || '{}');
+    } catch {
+      return {};
     }
+  });
+
+  if (!events.length) return null;
+
+  const prev = () => setIndex((i) => (i - 1 + events.length) % events.length);
+  const next = () => setIndex((i) => (i + 1) % events.length);
+
+  const toggleReminder = (ev) => {
+    const updated = { ...reminded, [ev.id]: !reminded[ev.id] };
+    setReminded(updated);
+    localStorage.setItem('vulpora_event_reminders', JSON.stringify(updated));
+    onNotify?.(
+      updated[ev.id]
+        ? `Lembrete ativado para "${ev.title}"!`
+        : `Lembrete removido de "${ev.title}".`
+    );
   };
 
   return (
-    <section className="glass hot choose-comm">
-      <p className="eyebrow">Bem-vindo ao Festival</p>
-      <h2>Escolha por qual evento começar</h2>
-      <p className="m">
-        Selecione em qual evento você deseja entrar agora. Você poderá alternar entre a Ducks e a The Kingdom a qualquer momento pelo topo do site ou no seu perfil:
-      </p>
+    <section className="glass hot events-carousel-sec" aria-label="Eventos da comunidade">
+      <div className="carousel-head">
+        <div>
+          <p className="eyebrow">PROGRAMAÇÃO & PRÓXIMOS EVENTOS</p>
+          <h2 style={{ margin: 0 }}>Eventos da Comunidade</h2>
+        </div>
 
-      <div className="comm-grid">
-        <button type="button" className="comm-card ducks" disabled={busy} onClick={() => pick('ducks')}>
-          <CommunityTag community="ducks" />
-          <h3>Evento Ducks</h3>
-          <p className="m">Missões, árvore de cartinhas e ranking exclusivos da Ducks.</p>
-        </button>
+        <div className="carousel-controls">
+          <button type="button" className="car-arrow" onClick={prev} aria-label="Evento anterior">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <button type="button" className="car-arrow" onClick={next} aria-label="Próximo evento">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+        </div>
+      </div>
 
-        <button type="button" className="comm-card kingdom" disabled={busy} onClick={() => pick('kingdom')}>
-          <CommunityTag community="kingdom" />
-          <h3>Evento The Kingdom</h3>
-          <p className="m">Missões, árvore de cartinhas e ranking exclusivos da The Kingdom.</p>
-        </button>
+      <div className="carousel-viewport">
+        <div
+          className="carousel-track"
+          style={{ transform: `translateX(-${index * 100}%)` }}
+        >
+          {events.map((item) => {
+            const isLive = item.status === 'live';
+            const isReminded = Boolean(reminded[item.id]);
+
+            return (
+              <div key={item.id} className="carousel-slide">
+                <div className={`event-banner ${isLive ? 'is-live' : 'is-upcoming'}`}>
+                  <div className="event-banner-top">
+                    <span className={`badge ${isLive ? 'pine' : 'gold'}`}>
+                      <Icon name={isLive ? 'sparkles' : 'calendar'} size={13} />
+                      <span>{item.badge}</span>
+                    </span>
+                    <span className="event-date">{item.date}</span>
+                  </div>
+
+                  <h3>{item.title}</h3>
+                  <p className="m">{item.description}</p>
+
+                  <div className="event-banner-foot">
+                    {isLive ? (
+                      <button
+                        type="button"
+                        className="btn red"
+                        onClick={() => {
+                          const el = document.querySelector(item.target || '#natal-hub');
+                          el?.scrollIntoView({ behavior: 'smooth' });
+                        }}
+                      >
+                        <Icon name="sparkles" size={16} />
+                        <span>{item.cta || 'Participar agora'}</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className={`btn ${isReminded ? 'pine' : 'ghost'}`}
+                        onClick={() => toggleReminder(item)}
+                      >
+                        <Icon name={isReminded ? 'check' : 'clock'} size={16} />
+                        <span>{isReminded ? 'Lembrete ativado' : item.cta || 'Avise-me'}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="carousel-dots" role="tablist" aria-label="Selecionar evento">
+        {events.map((item, idx) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`car-dot ${idx === index ? 'on' : ''}`}
+            onClick={() => setIndex(idx)}
+            aria-label={`Ver ${item.title}`}
+          />
+        ))}
       </div>
     </section>
   );
 }
 
 /* ---------- Login (Discord, Google e E-mail expansível) ---------- */
-export function Login({ erro }) {
+export function Login({ erro, communityMeta, isPortal }) {
   const [showEmail, setShowEmail] = useState(false);
-  const [mode, setMode] = useState('login'); // 'login' | 'register'
+  const [mode, setMode] = useState('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [formErr, setFormErr] = useState('');
 
+  const returnTo = encodeURIComponent(isPortal ? '/comunidade' : getCommunityBasePath());
+  const commName = communityMeta?.name || 'Vulpora';
+  const commTag = communityMeta?.tag || 'VULPORA';
+
   const oauthErrMsg =
-    erro === 'sem_servidor'
-      ? 'Você precisa estar no servidor da Ducks ou da The Kingdom no Discord, ou entrar com Google / E-mail.'
-      : erro === 'google'
+    erro === 'google'
       ? 'Não foi possível entrar com o Google. Tente novamente.'
       : erro === 'google_config'
       ? 'Login com Google ainda não configurado no servidor.'
@@ -255,21 +337,25 @@ export function Login({ erro }) {
         <Tree letters={Array(7).fill({})} />
       </div>
       <div className="login-copy">
-        <p className="eyebrow">25 dias · missões · prêmios</p>
-        <h1>Entre para acender a sua luz</h1>
+<p className="eyebrow">
+          {isPortal ? 'PORTAL DE COMUNIDADES · NATAL 2026' : `COMUNIDADE ${commTag} · NATAL 2026`}
+        </p>
+        <h1>{isPortal ? 'Faça login para acessar' : `Entre na comunidade ${commName}`}</h1>
         <p className="m">
-          Escolha como deseja acessar o festival para participar das missões, subir no ranking e deixar cartinhas na árvore.
+          {isPortal
+            ? 'Entre com Discord, Google ou E-mail para visualizar as comunidades disponíveis e participar dos eventos.'
+            : 'Acesse para acompanhar o ranking, próximos eventos, missões diárias e deixar cartinhas na árvore.'}
         </p>
 
         {(formErr || oauthErrMsg) && <div className="err">{formErr || oauthErrMsg}</div>}
 
         <div className="oauth-stack">
-          <a className="btn dc big" href="/auth/discord">
+          <a className="btn dc big" href={`/auth/discord?returnTo=${returnTo}`}>
             <Icon name="discord" size={20} />
             <span>Entrar com Discord</span>
           </a>
 
-          <a className="btn google big" href="/auth/google">
+          <a className="btn google big" href={`/auth/google?returnTo=${returnTo}`}>
             <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
               <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.8C6.2 7.2 8.9 5 12 5z" />
               <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.6l3.7 2.9c2.2-2 3.7-5 3.7-8.7z" />
@@ -360,12 +446,14 @@ export function Login({ erro }) {
   );
 }
 
-/* ---------- Início ---------- */
-export function Home({ me, ev, letters, onOpen, onWrite, onMission }) {
+/* ---------- Tela Principal da Comunidade (/comunidade/:slug/natal) ---------- */
+export function Home({ me, ev, rk, communityMeta, letters, onOpen, onWrite, onMission, onNotify }) {
   const m = ev.missions[Math.max(ev.today, 1) - 1] || ev.missions[0];
   const C = 2 * Math.PI * 42;
   const rest = Math.max(0, 25 - ev.today);
-  const isKingdom = me.user?.community === 'kingdom';
+  const commName = communityMeta?.name || 'Comunidade';
+  const commTag = communityMeta?.tag || 'EVENTO';
+  const commTheme = communityMeta?.theme;
 
   const eyebrow =
     ev.status === 'before'
@@ -377,120 +465,165 @@ export function Home({ me, ev, letters, onOpen, onWrite, onMission }) {
       : `Faltam ${rest} ${rest === 1 ? 'dia' : 'dias'} para o Natal`;
 
   return (
-    <div className="home">
-      <section className="glass hot">
-        <div className="who-name" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
-          <h2 style={{ margin: 0 }}>
-            Árvore {isKingdom ? 'da The Kingdom' : 'da Ducks'}
-          </h2>
-          <CommunityTag community={me.user?.community} />
-        </div>
-        <p className="m">
-          Cartinhas exclusivas {isKingdom ? 'da The Kingdom' : 'da Ducks'}. Toque num envelope na árvore para abrir.
-        </p>
-        <Tree letters={letters} onOpen={onOpen} />
-
-        {letters.length > 0 && (
-          <div className="letter-cards">
-            {letters.slice(0, 6).map((l, idx) => (
-              <button
-                key={l.id ?? idx}
-                type="button"
-                className="letter-card"
-                onClick={() => onOpen?.(l)}
-              >
-                <span className="letter-seal">
-                  <Icon name="mail" size={14} />
-                </span>
-                <span className="letter-meta">
-                  <b className="uname">{l.author || 'Anônimo'}</b>
-                  <small>Toque para ler</small>
-                </span>
-              </button>
-            ))}
+    <div className="community-hub">
+      {/* Cabeçalho da Comunidade */}
+      <section className="glass hot community-hero">
+        <div className="comm-hero-top">
+          <div>
+            <div className="who-name">
+              <CommunityTag tag={commTag} theme={commTheme} />
+              <span className="badge gold">
+                <Icon name="sparkles" size={13} /> Natal 2026
+              </span>
+            </div>
+            <h1 style={{ margin: '8px 0 4px' }}>{commName}</h1>
+            <p className="m">{communityMeta?.subtitle}</p>
           </div>
-        )}
 
-        <div className="cta">
-          <button className="btn red" onClick={onWrite}>
-            <Icon name="mail" size={17} />
-            <span>Escrever cartinha</span>
-          </button>
+          <div className="comm-hero-links">
+            <a href="#calendario" className="btn ghost">
+              <Icon name="calendar" size={16} />
+              <span>Calendário</span>
+            </a>
+            <a href="#galeria" className="btn ghost">
+              <Icon name="gallery" size={16} />
+              <span>Galeria</span>
+            </a>
+          </div>
         </div>
       </section>
 
-      <section className="glass hot today">
-        <p className="eyebrow">{eyebrow}</p>
-        <div className="hero">
-          <svg className="ring" viewBox="0 0 100 100">
-            <circle cx="50" cy="50" r="42" stroke="rgba(241, 228, 212, 0.16)" />
-            <circle
-              className="v"
-              cx="50"
-              cy="50"
-              r="42"
-              stroke="var(--gold, #F4A51D)"
-              strokeDasharray={C}
-              strokeDashoffset={C * (1 - me.missionsDone / 25)}
-            />
-          </svg>
-          <div className="ringtxt">
-            <b className="big">{me.missionsDone}</b>
-            <small>de 25</small>
+      {/* Carrossel de Eventos Futuros & Ativos */}
+      <EventsCarousel events={communityMeta?.events || []} onNotify={onNotify} />
+
+      {/* Evento Ativo: Natal Mágico (Árvore + Missão do Dia) */}
+      <div id="natal-hub" className="home">
+        <section className="glass hot">
+          <div className="who-name" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
+            <h2 style={{ margin: 0 }}>Árvore de {commName}</h2>
+            <CommunityTag tag={commTag} theme={commTheme} />
           </div>
-        </div>
-        <p className="m center">
-          {me.points != null
-            ? `${me.points} pontos acumulados`
-            : 'Pontos secretos · revelados no ranking final'}
-        </p>
-        {m && (
-          <>
-            <h3>
-              Dia {m.day} · {m.title}
-            </h3>
-            <p className="m">{m.objective}</p>
-            {m.points != null && <p className="gain">+{m.points} pontos</p>}
-            <button
-              className={`btn ${m.status === 'done' ? 'pine' : m.status === 'pending' ? 'bronze' : ''}`}
-              disabled={m.status === 'locked'}
-              onClick={() => onMission(m)}
-            >
-              {!m ? (
-                'Indisponível'
-              ) : m.status === 'done' ? (
-                <>
-                  <Icon name="check" size={16} />
-                  <span>Missão concluída</span>
-                </>
-              ) : m.status === 'pending' ? (
-                <>
-                  <Icon name="clock" size={16} />
-                  <span>Em análise</span>
-                </>
-              ) : (
-                'Abrir missão'
-              )}
+          <p className="m">
+            Pendure uma mensagem para a comunidade. Toque num envelope na árvore para abrir.
+          </p>
+          <Tree letters={letters} onOpen={onOpen} />
+
+          {letters.length > 0 && (
+            <div className="letter-cards">
+              {letters.slice(0, 6).map((l, idx) => (
+                <button
+                  key={l.id ?? idx}
+                  type="button"
+                  className="letter-card"
+                  onClick={() => onOpen?.(l)}
+                >
+                  <span className="letter-seal">
+                    <Icon name="mail" size={14} />
+                  </span>
+                  <span className="letter-meta">
+                    <b className="uname">{l.author || 'Anônimo'}</b>
+                    <small>Toque para ler</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="cta">
+            <button className="btn red" onClick={onWrite}>
+              <Icon name="mail" size={17} />
+              <span>Escrever cartinha</span>
             </button>
-          </>
-        )}
+          </div>
+        </section>
+
+        <section className="glass hot today">
+          <p className="eyebrow">{eyebrow}</p>
+          <div className="hero">
+            <svg className="ring" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="42" stroke="rgba(241, 228, 212, 0.16)" />
+              <circle
+                className="v"
+                cx="50"
+                cy="50"
+                r="42"
+                stroke="var(--gold, #F4A51D)"
+                strokeDasharray={C}
+                strokeDashoffset={C * (1 - me.missionsDone / 25)}
+              />
+            </svg>
+            <div className="ringtxt">
+              <b className="big">{me.missionsDone}</b>
+              <small>de 25</small>
+            </div>
+          </div>
+          <p className="m center">
+            {me.points != null
+              ? `${me.points} pontos acumulados`
+              : 'Conclua missões para subir no ranking'}
+          </p>
+          {m && (
+            <>
+              <h3>
+                Dia {m.day} · {m.title}
+              </h3>
+              <p className="m">{m.objective}</p>
+              {m.points != null && <p className="gain">+{m.points} pontos</p>}
+              <button
+                className={`btn ${m.status === 'done' ? 'pine' : m.status === 'pending' ? 'bronze' : ''}`}
+                disabled={m.status === 'locked'}
+                onClick={() => onMission(m)}
+              >
+                {!m ? (
+                  'Indisponível'
+                ) : m.status === 'done' ? (
+                  <>
+                    <Icon name="check" size={16} />
+                    <span>Missão concluída</span>
+                  </>
+                ) : m.status === 'pending' ? (
+                  <>
+                    <Icon name="clock" size={16} />
+                    <span>Em análise</span>
+                  </>
+                ) : (
+                  'Abrir missão'
+                )}
+              </button>
+            </>
+          )}
+        </section>
+      </div>
+
+      {/* Ranking da Comunidade */}
+      <section className="glass hot">
+        <div className="tree-head" style={{ marginBottom: 12 }}>
+          <div>
+            <p className="eyebrow">{commTag} · TOP PARTICIPANTES</p>
+            <h2 style={{ margin: 0 }}>Ranking da Comunidade</h2>
+          </div>
+          <a href="#ranking" className="btn ghost">
+            <Icon name="trophy" size={16} />
+            <span>Ver completo</span>
+          </a>
+        </div>
+        <Ranking rk={rk || { ranking: [] }} />
       </section>
     </div>
   );
 }
 
 /* ---------- Calendário do Advento (Mosaico) ---------- */
-export function Calendar({ ev, onMission }) {
-  const isKingdom = ev.community === 'kingdom';
+export function Calendar({ ev, communityMeta, onMission }) {
   return (
     <section className="glass hot cal-sec">
       <div className="cal-head">
         <p className="eyebrow">
-          Dezembro 2026 · {isKingdom ? 'THE KINGDOM' : 'DUCKS'}
+          Dezembro 2026 · {communityMeta?.tag || 'EVENTO'}
         </p>
         <h2>Calendário Mágico</h2>
         <p className="m">
-          Desafios exclusivos {isKingdom ? 'da The Kingdom' : 'da Ducks'}. Uma porta nova se abre a cada dia.
+          Desafios exclusivos de {communityMeta?.name || 'Comunidade'}. Uma porta nova se abre a cada dia.
         </p>
       </div>
 
@@ -556,10 +689,11 @@ export function Calendar({ ev, onMission }) {
 
 /* ---------- Ranking (pódio + lista) ---------- */
 export function Ranking({ rk }) {
-  const top = [1, 0, 2].map((i) => rk.ranking[i]).filter(Boolean);
+  const list = rk?.ranking || [];
+  const top = [1, 0, 2].map((i) => list[i]).filter(Boolean);
   return (
     <>
-      {!rk.ranking.length && <p className="m">Ninguém pontuou ainda. Seja a primeira pessoa!</p>}
+      {!list.length && <p className="m">Ninguém pontuou ainda. Seja a primeira pessoa!</p>}
       <div className="podium">
         {top.map((r) => (
           <div key={r.position} className={`pod p${r.position}`}>
@@ -572,7 +706,7 @@ export function Ranking({ rk }) {
           </div>
         ))}
       </div>
-      {rk.ranking.slice(3).map((r) => (
+      {list.slice(3).map((r) => (
         <div key={r.position} className="row">
           <span className="pos">{r.position}</span>
           <Avatar u={r} />
@@ -580,7 +714,7 @@ export function Ranking({ rk }) {
           <b className="pts">{r.points} pts</b>
         </div>
       ))}
-      {rk.me && (
+      {rk?.me && (
         <div className="row me">
           <span className="pos">{rk.me.position ?? '—'}</span>
           <span className="av">
@@ -631,21 +765,10 @@ export function Prizes({ pz, done }) {
 }
 
 /* ---------- Perfil ---------- */
-export function Profile({ me, onLogout, onSwitchCommunity }) {
+export function Profile({ me, communityMeta, onLogout }) {
   const [, setTick] = useState(0);
-  const [switching, setSwitching] = useState(false);
   const storageKey = me?.user?.id ? `avatar_${me.user.id}` : null;
   const hasCustom = Boolean(storageKey && localStorage.getItem(storageKey));
-
-  const switchTo = async (comm) => {
-    if (switching || !onSwitchCommunity || comm === me.user.community) return;
-    setSwitching(true);
-    try {
-      await onSwitchCommunity(comm);
-    } finally {
-      setSwitching(false);
-    }
-  };
 
   const changeAvatar = (e) => {
     const f = e.target.files?.[0];
@@ -690,10 +813,10 @@ export function Profile({ me, onLogout, onSwitchCommunity }) {
         <div>
           <div className="who-name">
             <b className="big uname">{me.user.name}</b>
-            <CommunityTag community={me.user.community} />
+            <CommunityTag tag={communityMeta?.tag || 'COMUNIDADE'} theme={communityMeta?.theme} />
           </div>
           <p className="m">
-            {me.missionsDone} de 25 missões concluídas neste evento
+            {me.missionsDone} de 25 missões concluídas
             {me.points != null ? ` · ${me.points} pontos` : ''}
           </p>
           <div className="av-actions">
@@ -711,48 +834,6 @@ export function Profile({ me, onLogout, onSwitchCommunity }) {
       </div>
       <div className="bar">
         <i style={{ width: `${(me.missionsDone / 25) * 100}%` }} />
-      </div>
-
-      <h3>Trocar de evento</h3>
-      <p className="m">
-        Você pode participar dos dois eventos! Seu progresso, cartinhas e ranking ficam salvos separadamente em cada servidor.
-      </p>
-      <div className="comm-grid profile-events">
-        <button
-          type="button"
-          className={`comm-card ducks ${me.user.community === 'ducks' ? 'active' : ''}`}
-          disabled={switching || me.user.community === 'ducks'}
-          onClick={() => switchTo('ducks')}
-        >
-          <div className="who-name" style={{ justifyContent: 'space-between', width: '100%' }}>
-            <CommunityTag community="ducks" />
-            {me.user.community === 'ducks' && <span className="badge pine">Ativo agora</span>}
-          </div>
-          <b>Evento Ducks</b>
-          <small className="m">
-            {me.user.community === 'ducks'
-              ? 'Você está visualizando as missões e a árvore da Ducks.'
-              : 'Clique para entrar e participar do evento da Ducks.'}
-          </small>
-        </button>
-
-        <button
-          type="button"
-          className={`comm-card kingdom ${me.user.community === 'kingdom' ? 'active' : ''}`}
-          disabled={switching || me.user.community === 'kingdom'}
-          onClick={() => switchTo('kingdom')}
-        >
-          <div className="who-name" style={{ justifyContent: 'space-between', width: '100%' }}>
-            <CommunityTag community="kingdom" />
-            {me.user.community === 'kingdom' && <span className="badge pine">Ativo agora</span>}
-          </div>
-          <b>Evento The Kingdom</b>
-          <small className="m">
-            {me.user.community === 'kingdom'
-              ? 'Você está visualizando as missões e a árvore da The Kingdom.'
-              : 'Clique para entrar e participar do evento da The Kingdom.'}
-          </small>
-        </button>
       </div>
 
       <h3>Conta conectada</h3>
@@ -844,7 +925,7 @@ export function WriteModal({ authorName, onSend }) {
   return (
     <>
       <h3>Escrever cartinha</h3>
-      <p className="m">Ela fica pendurada na árvore da sua comunidade para alguém ler.</p>
+      <p className="m">Ela fica pendurada na árvore da comunidade para alguém ler.</p>
 
       <div className="write-author">
         <Icon name="mail" size={15} />
@@ -895,10 +976,10 @@ export const LetterModal = ({ l }) => (
 );
 
 /* ---------- Galeria de Artes ---------- */
-export function GalleryPage({ items = [], me, isAdmin, onOpenForm, onReview, onInspect }) {
+export function GalleryPage({ items = [], me, communityMeta, isAdmin, onOpenForm, onReview, onInspect }) {
   const [filter, setFilter] = useState('approved');
 
-  const userId = me?.user?.id || me?.user?._id || me?.user?.discordId;
+  const userId = me?.user?.id;
   const approved = items.filter((item) => item.status === 'approved');
   const pending = items.filter((item) => item.status === 'pending');
   const myPending = pending.filter((item) => item.authorId === userId);
@@ -912,7 +993,7 @@ export function GalleryPage({ items = [], me, isAdmin, onOpenForm, onReview, onI
           <p className="eyebrow">Exposição de Natal</p>
           <div className="who-name">
             <h2 style={{ margin: 0 }}>Galeria da Comunidade</h2>
-            <CommunityTag community={me?.user?.community} />
+            <CommunityTag tag={communityMeta?.tag || 'COMUNIDADE'} theme={communityMeta?.theme} />
           </div>
           <p className="m">
             Compartilhe suas artes, fotos e criações natalinas. Todas as publicações passam pela aprovação dos administradores.
@@ -1107,7 +1188,7 @@ export function GalleryInspectModal({ art }) {
   );
 }
 
-/* ---------- Página de Regras (vazia para definir depois) ---------- */
+/* ---------- Página de Regras ---------- */
 export function RulesPage() {
   return (
     <section className="glass hot">
@@ -1118,7 +1199,7 @@ export function RulesPage() {
   );
 }
 
-/* ---------- Página de Suporte (gancho para integração com Bot) ---------- */
+/* ---------- Página de Suporte ---------- */
 export function SupportPage() {
   return (
     <section className="glass hot">
