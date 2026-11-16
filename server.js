@@ -4,7 +4,7 @@ import express from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import supabase from './db.js';
@@ -32,9 +32,12 @@ const {
   NODE_ENV = VERCEL ? 'production' : 'development',
   DISCORD_CLIENT_ID,
   DISCORD_CLIENT_SECRET,
+  GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET,
   DUCKS_GUILD_ID = '1472932028721664148',
   KINGDOM_GUILD_ID = '992981876664971306',
   ADMIN_IDS = '',
+  ADMIN_EMAILS = '',
   EVENT_START = '2026-12-01',
   DEBUG_DAY,
   TRUST_PROXY,
@@ -42,9 +45,48 @@ const {
 
 const PROD = NODE_ENV === 'production' || Boolean(VERCEL);
 const ADMINS = new Set(ADMIN_IDS.split(',').map((s) => s.trim()).filter(Boolean));
+const ADMIN_EMAIL_SET = new Set(
+  ADMIN_EMAILS.split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+);
 const SESSION_MS = 30 * 24 * 3600 * 1000;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const run = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+const isUserAdmin = (u) =>
+  Boolean(
+    (u?.discord_id && ADMINS.has(u.discord_id)) ||
+    (u?.email && ADMIN_EMAIL_SET.has(u.email.toLowerCase()))
+  );
+
+function hashPassword(password) {
+  const salt = randomBytes(16).toString('hex');
+  const hash = scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, stored) {
+  if (!stored || !stored.includes(':')) return false;
+  try {
+    const [salt, key] = stored.split(':');
+    const keyBuf = Buffer.from(key, 'hex');
+    const derived = scryptSync(password, salt, 64);
+    return keyBuf.length === derived.length && timingSafeEqual(keyBuf, derived);
+  } catch {
+    return false;
+  }
+}
+
+async function createSession(res, userId) {
+  await supabase.from('sessions').delete().lt('expires_at', Date.now());
+  const sid = randomBytes(32).toString('hex');
+  const { error } = await supabase
+    .from('sessions')
+    .insert({ id: sid, user_id: userId, expires_at: Date.now() + SESSION_MS });
+  if (error) throw error;
+  res.cookie('sid', sid, { httpOnly: true, sameSite: 'lax', secure: PROD, maxAge: SESSION_MS });
+}
 
 function getBaseUrl(req) {
   if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/$/, '');
@@ -106,8 +148,13 @@ async function giveCompletion(uid, day, community) {
   return data && data.length > 0 ? pts : 0;
 }
 
-const avatarUrl = (u) =>
-  u?.avatar ? `https://cdn.discordapp.com/avatars/${u.discord_id}/${u.avatar}.png?size=128` : null;
+const avatarUrl = (u) => {
+  if (!u?.avatar) return null;
+  if (u.avatar.startsWith('http://') || u.avatar.startsWith('https://')) return u.avatar;
+  return u.discord_id
+    ? `https://cdn.discordapp.com/avatars/${u.discord_id}/${u.avatar}.png?size=128`
+    : null;
+};
 
 /* Verificações automáticas de missão (isoladas na árvore/desafios da comunidade) */
 const checks = {
@@ -153,7 +200,14 @@ app.use(
         scriptSrc: ["'self'", "'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        imgSrc: ["'self'", 'data:', 'blob:', 'https://cdn.discordapp.com', 'https://*.supabase.co'],
+        imgSrc: [
+          "'self'",
+          'data:',
+          'blob:',
+          'https://cdn.discordapp.com',
+          'https://lh3.googleusercontent.com',
+          'https://*.supabase.co',
+        ],
         connectSrc: ["'self'", 'https://*.supabase.co'],
         upgradeInsecureRequests: PROD ? [] : null,
       },
@@ -190,7 +244,7 @@ app.use(
       .maybeSingle();
 
     req.user = session?.users || null;
-    if (req.user) req.user.isAdmin = ADMINS.has(req.user.discord_id);
+    if (req.user) req.user.isAdmin = isUserAdmin(req.user);
     next();
   })
 );
@@ -273,7 +327,7 @@ app.get(
         .eq('discord_id', d.id)
         .maybeSingle();
 
-      // Mantém a tag travada se já estiver definida; senão atribui automaticamente pelo servidor
+      // Mantém a comunidade já escolhida; senão atribui automaticamente pelo servidor
       let community = existing?.community || null;
       if (!community) {
         if (inDucks && !inKingdom) community = 'ducks';
@@ -296,19 +350,198 @@ app.get(
         .single();
       if (uErr) throw uErr;
 
-      await supabase.from('sessions').delete().lt('expires_at', Date.now());
-      const sid = randomBytes(32).toString('hex');
-      const { error: sErr } = await supabase
-        .from('sessions')
-        .insert({ id: sid, user_id: user.id, expires_at: Date.now() + SESSION_MS });
-      if (sErr) throw sErr;
-
-      res.cookie('sid', sid, { httpOnly: true, sameSite: 'lax', secure: PROD, maxAge: SESSION_MS });
+      await createSession(res, user.id);
       res.redirect('/#perfil');
     } catch (e) {
       console.error('Erro no login do Discord:', e.message);
       res.redirect('/?erro=discord');
     }
+  })
+);
+
+/* ---------- Login com Google (OAuth2) ---------- */
+app.get('/auth/google', (req, res) => {
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    return res.redirect('/?erro=google_config');
+  }
+  const state = randomBytes(16).toString('hex');
+  const redirectUri = `${getBaseUrl(req)}/auth/google/callback`;
+  res.cookie('oauth_state', state, { httpOnly: true, sameSite: 'lax', secure: PROD, maxAge: 10 * 60 * 1000 });
+
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: 'openid email profile',
+    state,
+    prompt: 'select_account',
+  });
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+});
+
+app.get(
+  '/auth/google/callback',
+  run(async (req, res) => {
+    const { code, state } = req.query;
+    const saved = req.cookies.oauth_state;
+    const redirectUri = `${getBaseUrl(req)}/auth/google/callback`;
+    res.clearCookie('oauth_state');
+    if (!code || !state || state !== saved) return res.redirect('/?erro=state');
+
+    try {
+      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: GOOGLE_CLIENT_ID,
+          client_secret: GOOGLE_CLIENT_SECRET,
+          grant_type: 'authorization_code',
+          code: String(code),
+          redirect_uri: redirectUri,
+        }),
+      });
+      if (!tokenRes.ok) throw new Error(`google token ${tokenRes.status}`);
+      const { access_token } = await tokenRes.json();
+
+      const infoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${access_token}` },
+      });
+      if (!infoRes.ok) throw new Error(`google userinfo ${infoRes.status}`);
+      const g = await infoRes.json();
+
+      const email = String(g.email || '').trim().toLowerCase();
+      if (!g.sub || !email) throw new Error('google_sem_email');
+
+      let { data: existing } = await supabase
+        .from('users')
+        .select('id, username, avatar, community')
+        .eq('google_id', g.sub)
+        .maybeSingle();
+
+      if (!existing) {
+        const resByEmail = await supabase
+          .from('users')
+          .select('id, username, avatar, community')
+          .eq('email', email)
+          .maybeSingle();
+        existing = resByEmail.data;
+      }
+
+      let userId = existing?.id;
+      if (userId) {
+        const { error } = await supabase
+          .from('users')
+          .update({
+            google_id: g.sub,
+            email,
+            avatar: existing.avatar || g.picture || null,
+          })
+          .eq('id', userId);
+        if (error) throw error;
+      } else {
+        const displayName = String(g.name || email.split('@')[0]).trim().slice(0, 40);
+        const { data: created, error } = await supabase
+          .from('users')
+          .insert({
+            google_id: g.sub,
+            email,
+            username: displayName,
+            avatar: g.picture || null,
+            community: null,
+          })
+          .select('id')
+          .single();
+        if (error) throw error;
+        userId = created.id;
+      }
+
+      await createSession(res, userId);
+      res.redirect('/#inicio');
+    } catch (e) {
+      console.error('Erro no login do Google:', e.message);
+      res.redirect('/?erro=google');
+    }
+  })
+);
+
+/* ---------- Cadastro e Login com E-mail e Senha ---------- */
+app.post(
+  '/auth/register',
+  strict,
+  run(async (req, res) => {
+    const name = String(req.body?.name ?? '').trim().slice(0, 40);
+    const email = String(req.body?.email ?? '').trim().toLowerCase();
+    const password = String(req.body?.password ?? '');
+
+    if (name.length < 2) {
+      return res.status(400).json({ error: 'nome_invalido', message: 'Informe um nome com pelo menos 2 caracteres.' });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'email_invalido', message: 'Informe um e-mail válido.' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'senha_curta', message: 'A senha precisa ter pelo menos 6 caracteres.' });
+    }
+
+    const { data: exists } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+    if (exists) {
+      return res.status(409).json({ error: 'email_em_uso', message: 'Este e-mail já está cadastrado. Faça login.' });
+    }
+
+    const { data: created, error } = await supabase
+      .from('users')
+      .insert({
+        email,
+        username: name,
+        password_hash: hashPassword(password),
+        community: null,
+      })
+      .select('id')
+      .single();
+    if (error) throw error;
+
+    await createSession(res, created.id);
+    res.status(201).json({ ok: true });
+  })
+);
+
+app.post(
+  '/auth/login',
+  strict,
+  run(async (req, res) => {
+    const email = String(req.body?.email ?? '').trim().toLowerCase();
+    const password = String(req.body?.password ?? '');
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'dados_incompletos', message: 'Preencha e-mail e senha.' });
+    }
+
+    const { data: user } = await supabase
+      .from('users')
+      .select('id, password_hash, google_id, discord_id')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (!user) {
+      return res.status(401).json({ error: 'credenciais_invalidas', message: 'E-mail ou senha incorretos.' });
+    }
+    if (!user.password_hash) {
+      const metodo = user.google_id ? 'Google' : 'Discord';
+      return res.status(400).json({
+        error: 'usar_oauth',
+        message: `Esta conta foi criada com ${metodo}. Use o botão "Entrar com ${metodo}".`,
+      });
+    }
+    if (!verifyPassword(password, user.password_hash)) {
+      return res.status(401).json({ error: 'credenciais_invalidas', message: 'E-mail ou senha incorretos.' });
+    }
+
+    await createSession(res, user.id);
+    res.json({ ok: true });
   })
 );
 
@@ -321,7 +554,7 @@ app.post(
   })
 );
 
-/* ---------- Perfil e Escolha/Tag de Comunidade ---------- */
+/* ---------- Perfil e Escolha/Troca de Evento ---------- */
 app.get(
   '/api/me',
   run(async (req, res) => {
@@ -333,13 +566,16 @@ app.get(
       ? await Promise.all([getUserStats(req.user.id, comm), getDoneDays(req.user.id, comm)])
       : [{ points: 0, missions: 0 }, []];
     const meta = COMMUNITY_META[comm] || null;
+    const provider = req.user.discord_id ? 'discord' : req.user.google_id ? 'google' : 'email';
 
     res.json({
       user: {
         id: req.user.id,
         name: req.user.username,
+        email: req.user.email || null,
+        provider,
         avatar: avatarUrl(req.user),
-        discord: { connected: true, id: req.user.discord_id },
+        discord: { connected: Boolean(req.user.discord_id), id: req.user.discord_id },
         isAdmin: req.user.isAdmin,
         community: comm,
         tag: meta?.tag || null,
@@ -353,7 +589,6 @@ app.get(
   })
 );
 
-// Define a tag/cargo caso o usuário esteja nos dois servidores (ou para admin alternar)
 // Permite que qualquer participante alterne entre o evento da Ducks e da The Kingdom
 app.post(
   '/api/me/community',

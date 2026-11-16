@@ -159,7 +159,7 @@ export function CommunityTag({ community }) {
   );
 }
 
-/* ---------- Escolha inicial (membros nos 2 servidores) ---------- */
+/* ---------- Escolha inicial de evento ---------- */
 export function ChooseCommunity({ onSelect }) {
   const [busy, setBusy] = useState(false);
 
@@ -175,10 +175,10 @@ export function ChooseCommunity({ onSelect }) {
 
   return (
     <section className="glass hot choose-comm">
-      <p className="eyebrow">Identificação de Servidor</p>
+      <p className="eyebrow">Bem-vindo ao Festival</p>
       <h2>Escolha por qual evento começar</h2>
       <p className="m">
-        Identificamos que você faz parte dos dois servidores no Discord. Escolha em qual evento deseja entrar agora — você poderá alternar entre os dois a qualquer momento pelo topo do site ou no seu perfil:
+        Selecione em qual evento você deseja entrar agora. Você poderá alternar entre a Ducks e a The Kingdom a qualquer momento pelo topo do site ou no seu perfil:
       </p>
 
       <div className="comm-grid">
@@ -198,14 +198,55 @@ export function ChooseCommunity({ onSelect }) {
   );
 }
 
-/* ---------- Login ---------- */
+/* ---------- Login (Discord, Google e E-mail) ---------- */
 export function Login({ erro }) {
-  const errMsg =
+  const [mode, setMode] = useState('login'); // 'login' | 'register'
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [formErr, setFormErr] = useState('');
+
+  const oauthErrMsg =
     erro === 'sem_servidor'
-      ? 'Você precisa estar no servidor da Ducks ou da The Kingdom no Discord para participar.'
+      ? 'Você precisa estar no servidor da Ducks ou da The Kingdom no Discord, ou entrar com Google / E-mail.'
+      : erro === 'google'
+      ? 'Não foi possível entrar com o Google. Tente novamente.'
+      : erro === 'google_config'
+      ? 'Login com Google ainda não configurado no servidor.'
       : erro && erro.length > 20
       ? erro
-      : 'Não foi possível entrar com o Discord. Tente novamente.';
+      : erro
+      ? 'Não foi possível concluir o login. Tente novamente.'
+      : '';
+
+  const handleEmailSubmit = async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    setFormErr('');
+    setBusy(true);
+
+    try {
+      const endpoint = mode === 'register' ? '/auth/register' : '/auth/login';
+      const payload = mode === 'register' ? { name, email, password } : { email, password };
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Não foi possível autenticar.');
+
+      window.location.hash = '#inicio';
+      window.location.reload();
+    } catch (err) {
+      setFormErr(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <section className="glass hot login">
@@ -216,14 +257,92 @@ export function Login({ erro }) {
         <p className="eyebrow">25 dias · missões · prêmios</p>
         <h1>Entre para acender a sua luz</h1>
         <p className="m">
-          Faça login com o Discord para participar das missões, subir no ranking e deixar cartinhas na árvore.
+          Participe das missões, suba no ranking e deixe cartinhas na árvore da sua comunidade.
         </p>
-        {erro && <div className="err">{errMsg}</div>}
-        <a className="btn dc big" href="/auth/discord">
-          <Icon name="discord" size={20} />
-          <span>Entrar com Discord</span>
-        </a>
-        <p className="m small">Verificamos seu servidor automaticamente para atribuir sua tag do evento.</p>
+
+        {(formErr || oauthErrMsg) && <div className="err">{formErr || oauthErrMsg}</div>}
+
+        <div className="oauth-stack">
+          <a className="btn dc big" href="/auth/discord">
+            <Icon name="discord" size={20} />
+            <span>Entrar com Discord</span>
+          </a>
+
+          <a className="btn google big" href="/auth/google">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.8C6.2 7.2 8.9 5 12 5z" />
+              <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.6l3.7 2.9c2.2-2 3.7-5 3.7-8.7z" />
+              <path fill="#FBBC05" d="M5.3 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.6 7.4C.6 9.4 0 11.6 0 14s.6 4.6 1.6 6.6l3.7-2.8z" />
+              <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5l-3.7 2.8C3.5 20.9 7.4 24 12 24z" />
+            </svg>
+            <span>Entrar com Google</span>
+          </a>
+        </div>
+
+        <div className="auth-sep">
+          <span>ou com e-mail</span>
+        </div>
+
+        <div className="seg auth-tabs">
+          <button
+            type="button"
+            className={mode === 'login' ? 'on' : ''}
+            onClick={() => { setMode('login'); setFormErr(''); }}
+          >
+            Entrar
+          </button>
+          <button
+            type="button"
+            className={mode === 'register' ? 'on' : ''}
+            onClick={() => { setMode('register'); setFormErr(''); }}
+          >
+            Criar conta
+          </button>
+        </div>
+
+        <form className="auth-form" onSubmit={handleEmailSubmit}>
+          {mode === 'register' && (
+            <input
+              type="text"
+              className="inp"
+              placeholder="Seu nome ou apelido"
+              maxLength={40}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          )}
+
+          <input
+            type="email"
+            className="inp"
+            placeholder="Seu e-mail"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+
+          <input
+            type="password"
+            className="inp"
+            placeholder={mode === 'register' ? 'Crie uma senha (mín. 6 caracteres)' : 'Sua senha'}
+            minLength={6}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+
+          <button type="submit" className="btn red" disabled={busy}>
+            <Icon name="mail" size={17} />
+            <span>
+              {busy
+                ? 'Aguarde...'
+                : mode === 'register'
+                ? 'Criar conta e entrar'
+                : 'Entrar com e-mail'}
+            </span>
+          </button>
+        </form>
       </div>
     </section>
   );
@@ -572,7 +691,7 @@ export function Profile({ me, onLogout, onSwitchCommunity }) {
             </label>
             {hasCustom && (
               <button type="button" className="link-btn" onClick={resetAvatar}>
-                Usar foto do Discord
+                Usar foto original
               </button>
             )}
           </div>
@@ -624,15 +743,21 @@ export function Profile({ me, onLogout, onSwitchCommunity }) {
         </button>
       </div>
 
-      <h3>Discord</h3>
+      <h3>Conta conectada</h3>
       <div className="row ok">
         <span className="medal">
-          <Icon name="discord" size={22} />
+          <Icon name={me.user.provider === 'discord' ? 'discord' : 'mail'} size={22} />
         </span>
         <div>
-          <b>Conectado</b>
+          <b>
+            {me.user.provider === 'discord'
+              ? 'Discord'
+              : me.user.provider === 'google'
+              ? 'Google'
+              : 'E-mail e Senha'}
+          </b>
           <p className="m uname">
-            <span style={{ color: '#8a943e' }}>●</span> {me.user.name}
+            <span style={{ color: '#8a943e' }}>●</span> {me.user.email || me.user.name}
           </p>
         </div>
         <button className="btn ghost" style={{ marginLeft: 'auto' }} onClick={onLogout}>
