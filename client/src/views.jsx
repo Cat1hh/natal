@@ -160,6 +160,64 @@ export function CommunityTag({ tag, theme }) {
   );
 }
 
+/* ---------- Vitrine de Comunidades (após o Login) ---------- */
+export function CommunitiesHub({ user, communities = [], onSelect }) {
+  return (
+    <section className="glass hot communities-portal">
+      <div className="portal-intro">
+        <p className="eyebrow">OLÁ, {user?.name?.toUpperCase() || 'PARTICIPANTE'} · BEM-VINDO(A)</p>
+        <h1>Escolha uma comunidade</h1>
+        <p className="m">
+          Selecione abaixo a comunidade que você deseja acessar para ver eventos, missões, ranking e a árvore de Natal.
+        </p>
+      </div>
+
+      <div className="comm-cards-grid">
+        {communities.map((comm) => {
+          const isHeaven = comm.theme === 'ducks' || comm.slug === 'heaven';
+          const liveEvent = comm.events?.find((e) => e.status === 'live');
+
+          return (
+            <article
+              key={comm.slug}
+              className={`comm-card ${isHeaven ? 'is-heaven' : 'is-kingdom'}`}
+            >
+              <div className="comm-card-top">
+                <CommunityTag tag={comm.tag} theme={comm.theme} />
+                <span className="badge pine">
+                  <Icon name="sparkles" size={13} />
+                  <span>{liveEvent ? liveEvent.badge : 'ATIVO'}</span>
+                </span>
+              </div>
+
+              <h2>{comm.name}</h2>
+              <p className="m">{comm.subtitle}</p>
+
+              {liveEvent && (
+                <div className="comm-card-event">
+                  <small>EVENTO EM DESTAQUE</small>
+                  <b>{liveEvent.title}</b>
+                  <span>{liveEvent.date}</span>
+                </div>
+              )}
+
+              <button
+                type="button"
+                className="btn red"
+                style={{ marginTop: 'auto', width: '100%', justifyContent: 'center' }}
+                onClick={() => onSelect?.(comm.slug)}
+              >
+                <Icon name="sparkles" size={16} />
+                <span>Entrar em {comm.name}</span>
+              </button>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 /* ---------- Carrossel de Eventos Futuros & Ativos ---------- */
 export function EventsCarousel({ events = [], onNotify }) {
   const [index, setIndex] = useState(0);
@@ -337,7 +395,7 @@ export function Login({ erro, communityMeta, isPortal }) {
         <Tree letters={Array(7).fill({})} />
       </div>
       <div className="login-copy">
-<p className="eyebrow">
+        <p className="eyebrow">
           {isPortal ? 'PORTAL DE COMUNIDADES · NATAL 2026' : `COMUNIDADE ${commTag} · NATAL 2026`}
         </p>
         <h1>{isPortal ? 'Faça login para acessar' : `Entre na comunidade ${commName}`}</h1>
