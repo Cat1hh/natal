@@ -1543,3 +1543,654 @@ textarea { width: 100%; margin-top: 8px; padding: 12px; border-radius: 14px; bor
 .crumb-link:hover {
   opacity: 1;
 }
+/* ==========================================================================
+   VULPORA — IDENTIDADE CÓSMICA (LOGIN E VITRINE FORA DO TEMA DE NATAL)
+   ========================================================================== */
+[data-community="vulpora"] {
+  --bg: #0b0614;
+  --accent: #b78cff;
+  --gold: #f4a51d;
+}
+
+.vulpora-auth-shell,
+.vulpora-portal-shell {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  background: radial-gradient(circle at 18% 12%, rgba(168, 85, 247, 0.34), transparent 45%),
+              radial-gradient(circle at 86% 24%, rgba(245, 158, 11, 0.22), transparent 42%),
+              radial-gradient(circle at 75% 88%, rgba(139, 92, 246, 0.32), transparent 48%),
+              linear-gradient(160deg, #090512 0%, #140a26 52%, #0b0614 100%);
+  color: #f8f5ff;
+  overflow-x: hidden;
+}
+
+.vulpora-auth-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 16px;
+}
+
+.vulpora-waves {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.vulpora-waves::before,
+.vulpora-waves::after {
+  content: "";
+  position: absolute;
+  width: 780px;
+  height: 780px;
+  border-radius: 44% 56% 62% 38% / 44% 38% 62% 56%;
+  background: conic-gradient(from 120deg, rgba(192, 132, 252, 0.24), rgba(245, 158, 11, 0.16), rgba(124, 58, 237, 0.22), transparent);
+  filter: blur(42px);
+}
+
+.vulpora-waves::before {
+  top: -280px;
+  left: -240px;
+}
+
+.vulpora-waves::after {
+  bottom: -300px;
+  right: -220px;
+}
+
+.vp-orb {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #fde68a, #d97706 65%, transparent);
+  box-shadow: 0 0 28px rgba(245, 158, 11, 0.45);
+}
+
+.vp-orb.o1 {
+  width: 24px;
+  height: 24px;
+  top: 22%;
+  right: 28%;
+  opacity: 0.75;
+}
+
+.vp-orb.o2 {
+  width: 14px;
+  height: 14px;
+  bottom: 24%;
+  left: 26%;
+  opacity: 0.6;
+}
+
+.vp-star {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: #fde68a;
+  clip-path: polygon(50% 0%, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0% 50%, 38% 38%);
+  opacity: 0.7;
+}
+
+.vp-star.s1 { top: 18%; left: 24%; }
+.vp-star.s2 { top: 44%; right: 20%; transform: scale(1.2); }
+.vp-star.s3 { bottom: 18%; right: 32%; transform: scale(0.85); }
+
+/* Card de Login / Cadastro Vulpora */
+.vulpora-card {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 430px;
+  padding: 34px 28px 30px;
+  border-radius: 30px;
+  background: rgba(16, 10, 30, 0.78);
+  border: 1px solid rgba(196, 165, 255, 0.2);
+  box-shadow: 0 24px 64px rgba(4, 2, 12, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.vp-back-btn {
+  position: absolute;
+  top: 22px;
+  left: 22px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f3e8ff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.vp-back-btn:hover {
+  background: rgba(183, 140, 255, 0.18);
+  transform: translateX(-2px);
+}
+
+/* Logo Vulpora */
+.vp-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.vp-logo.is-compact {
+  flex-direction: row;
+  text-align: left;
+  gap: 10px;
+  margin-bottom: 0;
+}
+
+.vp-wordmark-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.vp-logo.is-compact .vp-wordmark-wrap {
+  align-items: flex-start;
+}
+
+.vp-wordmark {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 2.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: #ffffff;
+}
+
+.vp-logo.is-compact .vp-wordmark {
+  font-size: 1.45rem;
+}
+
+.vp-tagline {
+  margin-top: 4px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  color: rgba(233, 213, 255, 0.72);
+  text-transform: uppercase;
+}
+
+.vp-dest-pill {
+  text-align: center;
+  margin-bottom: 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(183, 140, 255, 0.14);
+  border: 1px solid rgba(183, 140, 255, 0.28);
+  font-size: 0.8rem;
+  color: #e9d5ff;
+}
+
+.vp-err {
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(239, 68, 68, 0.16);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: #fecaca;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.vp-head-copy {
+  margin-bottom: 18px;
+}
+
+.vp-head-copy h1 {
+  margin: 0 0 6px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.vp-head-copy p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: rgba(233, 213, 255, 0.72);
+}
+
+.vp-welcome-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+  padding-top: 6px;
+}
+
+.vp-lead {
+  margin: 0;
+  max-width: 310px;
+  font-size: 0.94rem;
+  line-height: 1.5;
+  color: rgba(243, 232, 255, 0.84);
+}
+
+.vp-dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+
+.vp-dots i {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.vp-dots i.on {
+  width: 22px;
+  background: #b78cff;
+}
+
+/* Inputs em pílula */
+.vp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vp-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 50px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.vp-field:focus-within {
+  border-color: #b78cff;
+  background: rgba(183, 140, 255, 0.09);
+}
+
+.vp-field-ico {
+  display: inline-flex;
+  color: rgba(233, 213, 255, 0.65);
+  flex-shrink: 0;
+}
+
+.vp-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #ffffff;
+  font-size: 0.92rem;
+}
+
+.vp-field input::placeholder {
+  color: rgba(233, 213, 255, 0.48);
+}
+
+.vp-eye-btn {
+  border: 0;
+  background: transparent;
+  color: rgba(233, 213, 255, 0.6);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  cursor: pointer;
+}
+
+.vp-eye-btn:hover {
+  color: #ffffff;
+}
+
+.vp-forgot-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -4px;
+}
+
+.vp-forgot-link {
+  border: 0;
+  background: transparent;
+  color: rgba(233, 213, 255, 0.72);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.vp-forgot-link:hover {
+  color: #f4a51d;
+}
+
+/* Botões em pílula estilo Vulpora */
+.vp-pill-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 52px;
+  padding: 0 52px;
+  border-radius: 999px;
+  font-size: 0.96rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.vp-pill-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.vp-pill-btn.primary {
+  border: 0;
+  background: linear-gradient(135deg, #c49eff 0%, #a97aff 100%);
+  color: #130926;
+  box-shadow: 0 10px 26px rgba(169, 122, 255, 0.35);
+}
+
+.vp-pill-btn.primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 32px rgba(169, 122, 255, 0.48);
+}
+
+.vp-pill-btn.outline {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+
+.vp-pill-btn.outline:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.vp-arrow-circle {
+  position: absolute;
+  right: 7px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #170d2e;
+  color: #e9d5ff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Divisor e botões circulares OAuth */
+.vp-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0 16px;
+  color: rgba(233, 213, 255, 0.55);
+  font-size: 0.8rem;
+}
+
+.vp-divider::before,
+.vp-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.vp-oauth-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+
+.vp-oauth-circle {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  transition: transform 0.18s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.vp-oauth-circle:hover {
+  transform: translateY(-2px);
+  border-color: #b78cff;
+  background: rgba(183, 140, 255, 0.16);
+}
+
+.vp-switch-copy {
+  margin: 20px 0 0;
+  text-align: center;
+  font-size: 0.84rem;
+  color: rgba(233, 213, 255, 0.72);
+}
+
+.vp-switch-copy button {
+  border: 0;
+  background: transparent;
+  color: #f4a51d;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.vp-switch-copy button:hover {
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   VULPORA — VITRINE DE COMUNIDADES (APÓS LOGIN, FORA DO TEMA DE NATAL)
+   ========================================================================== */
+.portal-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 0 24px;
+  flex-wrap: wrap;
+}
+
+.vp-chip {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(196, 165, 255, 0.24);
+}
+
+.vulpora-portal-card {
+  padding: 30px 28px;
+  border-radius: 26px;
+  background: rgba(18, 11, 34, 0.78);
+  border: 1px solid rgba(196, 165, 255, 0.2);
+  box-shadow: 0 22px 56px rgba(4, 2, 12, 0.65);
+  backdrop-filter: blur(18px);
+}
+
+.vp-eyebrow {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #c49eff;
+  text-transform: uppercase;
+}
+
+.portal-intro {
+  max-width: 640px;
+  margin-bottom: 24px;
+}
+
+.portal-intro h1 {
+  margin: 6px 0 8px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.9rem;
+}
+
+.comm-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 20px;
+}
+
+.comm-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Card com tema próprio da The Kingdom */
+.comm-card.is-kingdom {
+  background: radial-gradient(circle at top right, rgba(244, 165, 29, 0.16), transparent 55%),
+              linear-gradient(165deg, rgba(44, 16, 24, 0.85), rgba(22, 10, 18, 0.92));
+  border-color: rgba(244, 165, 29, 0.32);
+}
+
+.comm-card.is-kingdom:hover {
+  transform: translateY(-3px);
+  border-color: rgba(244, 165, 29, 0.65);
+  box-shadow: 0 16px 36px rgba(244, 165, 29, 0.16);
+}
+
+/* Card com tema próprio da Heaven */
+.comm-card.is-heaven {
+  background: radial-gradient(circle at top right, rgba(56, 189, 248, 0.18), transparent 55%),
+              linear-gradient(165deg, rgba(14, 34, 58, 0.85), rgba(10, 18, 36, 0.92));
+  border-color: rgba(56, 189, 248, 0.32);
+}
+
+.comm-card.is-heaven:hover {
+  transform: translateY(-3px);
+  border-color: rgba(56, 189, 248, 0.65);
+  box-shadow: 0 16px 36px rgba(56, 189, 248, 0.16);
+}
+
+.comm-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.comm-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.comm-status-pill.kingdom {
+  background: rgba(244, 165, 29, 0.15);
+  color: #fcd34d;
+  border: 1px solid rgba(244, 165, 29, 0.35);
+}
+
+.comm-status-pill.heaven {
+  background: rgba(56, 189, 248, 0.15);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+.comm-card h2 {
+  margin: 4px 0 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.5rem;
+}
+
+.comm-card-event {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 4px 0;
+}
+
+.comm-card-event small {
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  color: #f4a51d;
+  font-weight: 700;
+}
+
+.comm-card-event span {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.comm-enter-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 48px;
+  margin-top: auto;
+  padding: 0 48px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.2s ease;
+}
+
+.comm-enter-btn.kingdom {
+  background: linear-gradient(135deg, #f4a51d 0%, #d97706 100%);
+  color: #1c0f06;
+  box-shadow: 0 10px 24px rgba(244, 165, 29, 0.28);
+}
+
+.comm-enter-btn.heaven {
+  background: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 100%);
+  color: #071929;
+  box-shadow: 0 10px 24px rgba(56, 189, 248, 0.28);
+}
+
+.comm-enter-btn:hover {
+  transform: translateY(-1px);
+}
+
+.crumb-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: 0.85;
+}
+
+.crumb-link:hover {
+  opacity: 1;
+}

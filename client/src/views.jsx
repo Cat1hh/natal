@@ -5,6 +5,433 @@ import { getCommunityBasePath } from './api.js';
 
 const MEDAL_COLOR = ['#F4A51D', '#E2D8CE', '#C87D3B'];
 
+/* ---------- Logo Oficial Vulpora (Raposa + Lua Crescente) ---------- */
+export function VulporaLogo({ compact = false }) {
+  return (
+    <div className={`vp-logo ${compact ? 'is-compact' : ''}`}>
+      <svg
+        className="vp-emblem"
+        viewBox="0 0 120 120"
+        width={compact ? 40 : 88}
+        height={compact ? 40 : 88}
+        aria-hidden="true"
+      >
+        <defs>
+          <linearGradient id="vpMoonGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#F5A623" />
+            <stop offset="48%" stopColor="#E96B9D" />
+            <stop offset="100%" stopColor="#9B5CFF" />
+          </linearGradient>
+          <linearGradient id="vpFoxGrad" x1="20%" y1="0%" x2="90%" y2="100%">
+            <stop offset="0%" stopColor="#F3E8FF" />
+            <stop offset="45%" stopColor="#C084FC" />
+            <stop offset="100%" stopColor="#7C3AED" />
+          </linearGradient>
+          <filter id="vpGlow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        <g filter="url(#vpGlow)">
+          {/* Lua crescente luminosa */}
+          <path
+            d="M54 16 C31 20 16 41 19 65 C22 88 43 104 67 101 C81 99 93 91 100 80 C87 89 69 90 54 81 C37 70 32 47 43 30 C46 24 50 20 54 16 Z"
+            fill="url(#vpMoonGrad)"
+          />
+          {/* Silhueta estilizada da raposa */}
+          <path
+            d="M64 24 L58 43 L48 53 L56 60 L51 74 C63 77 77 72 86 61 L93 47 L82 46 L86 28 L72 38 Z"
+            fill="url(#vpFoxGrad)"
+          />
+          {/* Brilho estelar */}
+          <path
+            d="M42 46 L44 51 L49 53 L44 55 L42 60 L40 55 L35 53 L40 51 Z"
+            fill="#FDE68A"
+          />
+        </g>
+      </svg>
+
+      <div className="vp-wordmark-wrap">
+        <span className="vp-wordmark">Vulpora</span>
+        {!compact && <span className="vp-tagline">SEU UNIVERSO COMEÇA AQUI.</span>}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Tela de Login & Cadastro Vulpora (Fora do tema de Natal) ---------- */
+export function Login({ erro, communityMeta, isPortal, onNotify }) {
+  // 'login' (Bem-vindo de volta), 'register' (Crie sua conta), 'welcome' (Tela inicial Vulpora)
+  const [screen, setScreen] = useState('login');
+  const [loginId, setLoginId] = useState('');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [formErr, setFormErr] = useState('');
+
+  const returnTo = encodeURIComponent(isPortal ? '/comunidade' : getCommunityBasePath());
+
+  const oauthErrMsg =
+    erro === 'google'
+      ? 'Não foi possível entrar com o Google. Tente novamente.'
+      : erro === 'google_config'
+      ? 'Login com Google ainda não configurado no servidor.'
+      : erro && erro.length > 20
+      ? erro
+      : erro
+      ? 'Não foi possível concluir o login. Tente novamente.'
+      : '';
+
+  const switchScreen = (next) => {
+    setScreen(next);
+    setFormErr('');
+    setShowPass(false);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    setFormErr('');
+    setBusy(true);
+
+    try {
+      const isRegister = screen === 'register';
+      const endpoint = isRegister ? '/auth/register' : '/auth/login';
+      const payload = isRegister
+        ? { name: name.trim(), email: email.trim(), password }
+        : { email: loginId.trim(), login: loginId.trim(), password };
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Não foi possível autenticar.');
+
+      window.location.hash = '#inicio';
+      window.location.reload();
+    } catch (err) {
+      setFormErr(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="vulpora-auth-shell">
+      <div className="vulpora-waves" aria-hidden="true">
+        <span className="vp-star s1" />
+        <span className="vp-star s2" />
+        <span className="vp-star s3" />
+        <span className="vp-orb o1" />
+        <span className="vp-orb o2" />
+      </div>
+
+      <section className="vulpora-card">
+        {screen !== 'welcome' && (
+          <button
+            type="button"
+            className="vp-back-btn"
+            onClick={() => switchScreen('welcome')}
+            aria-label="Voltar"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="19" y1="12" x2="5" y2="12" />
+              <polyline points="12 19 5 12 12 5" />
+            </svg>
+          </button>
+        )}
+
+        <VulporaLogo />
+
+        {!isPortal && communityMeta?.name && (
+          <div className="vp-dest-pill">
+            <span>Acessando comunidade: <b>{communityMeta.name}</b></span>
+          </div>
+        )}
+
+        {(formErr || oauthErrMsg) && <div className="vp-err">{formErr || oauthErrMsg}</div>}
+
+        {screen === 'welcome' ? (
+          <div className="vp-welcome-body">
+            <p className="vp-lead">
+              Crie, explore e conecte-se com comunidades, histórias e arte em um só lugar.
+            </p>
+
+            <div className="vp-dots" aria-hidden="true">
+              <i />
+              <i className="on" />
+              <i />
+            </div>
+
+            <button
+              type="button"
+              className="vp-pill-btn primary"
+              onClick={() => switchScreen('register')}
+            >
+              <span>Criar uma conta</span>
+              <span className="vp-arrow-circle">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="12 5 19 12 12 19" />
+                </svg>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className="vp-pill-btn outline"
+              onClick={() => switchScreen('login')}
+            >
+              <span>Entrar</span>
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="vp-head-copy">
+              <h1>{screen === 'register' ? 'Crie sua conta' : 'Bem-vindo(a) de volta!'}</h1>
+              <p>
+                {screen === 'register'
+                  ? 'Faça parte de um espaço criativo, acolhedor e cheio de possibilidades.'
+                  : 'Entre na sua conta para continuar explorando seu universo.'}
+              </p>
+            </div>
+
+            <form className="vp-form" onSubmit={handleSubmit}>
+              {screen === 'register' ? (
+                <>
+                  <label className="vp-field">
+                    <span className="vp-field-ico" aria-hidden="true">
+                      <Icon name="user" size={18} />
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Nome de usuário"
+                      maxLength={40}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                    />
+                  </label>
+
+                  <label className="vp-field">
+                    <span className="vp-field-ico" aria-hidden="true">
+                      <Icon name="mail" size={18} />
+                    </span>
+                    <input
+                      type="email"
+                      placeholder="E-mail"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </label>
+                </>
+              ) : (
+                <label className="vp-field">
+                  <span className="vp-field-ico" aria-hidden="true">
+                    <Icon name="user" size={18} />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="E-mail ou nome de usuário"
+                    value={loginId}
+                    onChange={(e) => setLoginId(e.target.value)}
+                    required
+                  />
+                </label>
+              )}
+
+              <label className="vp-field">
+                <span className="vp-field-ico" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                </span>
+                <input
+                  type={showPass ? 'text' : 'password'}
+                  placeholder="Senha"
+                  minLength={6}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="vp-eye-btn"
+                  onClick={() => setShowPass((v) => !v)}
+                  aria-label={showPass ? 'Ocultar senha' : 'Mostrar senha'}
+                >
+                  {showPass ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+              </label>
+
+              {screen === 'login' && (
+                <div className="vp-forgot-row">
+                  <button
+                    type="button"
+                    className="vp-forgot-link"
+                    onClick={() =>
+                      onNotify?.('Entre via Google/Discord ou contate o suporte para redefinir sua senha.')
+                    }
+                  >
+                    Esqueceu sua senha?
+                  </button>
+                </div>
+              )}
+
+              <button type="submit" className="vp-pill-btn primary" disabled={busy}>
+                <span>
+                  {busy
+                    ? 'Aguarde...'
+                    : screen === 'register'
+                    ? 'Criar conta'
+                    : 'Entrar'}
+                </span>
+                <span className="vp-arrow-circle">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                    <polyline points="12 5 19 12 12 19" />
+                  </svg>
+                </span>
+              </button>
+            </form>
+
+            <div className="vp-divider">
+              <span>ou continue com</span>
+            </div>
+
+            <div className="vp-oauth-row">
+              <a
+                className="vp-oauth-circle"
+                href={`/auth/google?returnTo=${returnTo}`}
+                title="Continuar com Google"
+                aria-label="Continuar com Google"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.8C6.2 7.2 8.9 5 12 5z" />
+                  <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.6l3.7 2.9c2.2-2 3.7-5 3.7-8.7z" />
+                  <path fill="#FBBC05" d="M5.3 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.6 7.4C.6 9.4 0 11.6 0 14s.6 4.6 1.6 6.6l3.7-2.8z" />
+                  <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5l-3.7 2.8C3.5 20.9 7.4 24 12 24z" />
+                </svg>
+              </a>
+
+              <a
+                className="vp-oauth-circle"
+                href={`/auth/discord?returnTo=${returnTo}`}
+                title="Continuar com Discord"
+                aria-label="Continuar com Discord"
+              >
+                <Icon name="discord" size={21} />
+              </a>
+            </div>
+
+            <p className="vp-switch-copy">
+              {screen === 'register' ? (
+                <>
+                  Já tem uma conta?{' '}
+                  <button type="button" onClick={() => switchScreen('login')}>
+                    Entrar
+                  </button>
+                </>
+              ) : (
+                <>
+                  Ainda não tem uma conta?{' '}
+                  <button type="button" onClick={() => switchScreen('register')}>
+                    Cadastre-se
+                  </button>
+                </>
+              )}
+            </p>
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+
+/* ---------- Vitrine de Comunidades Vulpora (Fora do tema de Natal) ---------- */
+export function CommunitiesHub({ user, communities = [], onSelect }) {
+  return (
+    <section className="vulpora-portal-card">
+      <div className="portal-intro">
+        <p className="vp-eyebrow">OLÁ, {user?.name?.toUpperCase() || 'EXPLORADOR(A)'} · UNIVERSO VULPORA</p>
+        <h1>Escolha uma comunidade</h1>
+        <p className="m">
+          Explore as comunidades oficiais da Vulpora. Cada comunidade possui sua própria identidade, ranking e eventos.
+        </p>
+      </div>
+
+      <div className="comm-cards-grid">
+        {communities.map((comm) => {
+          const isHeaven = comm.theme === 'ducks' || comm.slug === 'heaven';
+          const liveEvent = comm.events?.find((e) => e.status === 'live');
+
+          return (
+            <article
+              key={comm.slug}
+              className={`comm-card ${isHeaven ? 'is-heaven' : 'is-kingdom'}`}
+            >
+              <div className="comm-card-top">
+                <CommunityTag tag={comm.tag} theme={comm.theme} />
+                <span className={`comm-status-pill ${isHeaven ? 'heaven' : 'kingdom'}`}>
+                  <Icon name="sparkles" size={13} />
+                  <span>{isHeaven ? 'Tema Heaven' : 'Tema Kingdom'}</span>
+                </span>
+              </div>
+
+              <h2>{comm.name}</h2>
+              <p className="m">{comm.subtitle}</p>
+
+              {liveEvent && (
+                <div className="comm-card-event">
+                  <small>EVENTO ATIVO NA COMUNIDADE</small>
+                  <b>{liveEvent.title}</b>
+                  <span>{liveEvent.date}</span>
+                </div>
+              )}
+
+              <button
+                type="button"
+                className={`comm-enter-btn ${isHeaven ? 'heaven' : 'kingdom'}`}
+                onClick={() => onSelect?.(comm.slug)}
+              >
+                <span>Entrar em {comm.name}</span>
+                <span className="vp-arrow-circle">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                    <polyline points="12 5 19 12 12 19" />
+                  </svg>
+                </span>
+              </button>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 /* Mapa fiel ao mosaico do Calendário do Advento (grid 10x10) */
 const ADVENT_TILES = {
   1:  { col: '1 / 3',  row: '1 / 3',  theme: 't-dark-stars',     icon: 'branch' },
@@ -160,64 +587,6 @@ export function CommunityTag({ tag, theme }) {
   );
 }
 
-/* ---------- Vitrine de Comunidades (após o Login) ---------- */
-export function CommunitiesHub({ user, communities = [], onSelect }) {
-  return (
-    <section className="glass hot communities-portal">
-      <div className="portal-intro">
-        <p className="eyebrow">OLÁ, {user?.name?.toUpperCase() || 'PARTICIPANTE'} · BEM-VINDO(A)</p>
-        <h1>Escolha uma comunidade</h1>
-        <p className="m">
-          Selecione abaixo a comunidade que você deseja acessar para ver eventos, missões, ranking e a árvore de Natal.
-        </p>
-      </div>
-
-      <div className="comm-cards-grid">
-        {communities.map((comm) => {
-          const isHeaven = comm.theme === 'ducks' || comm.slug === 'heaven';
-          const liveEvent = comm.events?.find((e) => e.status === 'live');
-
-          return (
-            <article
-              key={comm.slug}
-              className={`comm-card ${isHeaven ? 'is-heaven' : 'is-kingdom'}`}
-            >
-              <div className="comm-card-top">
-                <CommunityTag tag={comm.tag} theme={comm.theme} />
-                <span className="badge pine">
-                  <Icon name="sparkles" size={13} />
-                  <span>{liveEvent ? liveEvent.badge : 'ATIVO'}</span>
-                </span>
-              </div>
-
-              <h2>{comm.name}</h2>
-              <p className="m">{comm.subtitle}</p>
-
-              {liveEvent && (
-                <div className="comm-card-event">
-                  <small>EVENTO EM DESTAQUE</small>
-                  <b>{liveEvent.title}</b>
-                  <span>{liveEvent.date}</span>
-                </div>
-              )}
-
-              <button
-                type="button"
-                className="btn red"
-                style={{ marginTop: 'auto', width: '100%', justifyContent: 'center' }}
-                onClick={() => onSelect?.(comm.slug)}
-              >
-                <Icon name="sparkles" size={16} />
-                <span>Entrar em {comm.name}</span>
-              </button>
-            </article>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
 /* ---------- Carrossel de Eventos Futuros & Ativos ---------- */
 export function EventsCarousel({ events = [], onNotify }) {
   const [index, setIndex] = useState(0);
@@ -336,174 +705,6 @@ export function EventsCarousel({ events = [], onNotify }) {
   );
 }
 
-/* ---------- Login (Discord, Google e E-mail expansível) ---------- */
-export function Login({ erro, communityMeta, isPortal }) {
-  const [showEmail, setShowEmail] = useState(false);
-  const [mode, setMode] = useState('login');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [formErr, setFormErr] = useState('');
-
-  const returnTo = encodeURIComponent(isPortal ? '/comunidade' : getCommunityBasePath());
-  const commName = communityMeta?.name || 'Vulpora';
-  const commTag = communityMeta?.tag || 'VULPORA';
-
-  const oauthErrMsg =
-    erro === 'google'
-      ? 'Não foi possível entrar com o Google. Tente novamente.'
-      : erro === 'google_config'
-      ? 'Login com Google ainda não configurado no servidor.'
-      : erro && erro.length > 20
-      ? erro
-      : erro
-      ? 'Não foi possível concluir o login. Tente novamente.'
-      : '';
-
-  const handleEmailSubmit = async (e) => {
-    e.preventDefault();
-    if (busy) return;
-    setFormErr('');
-    setBusy(true);
-
-    try {
-      const endpoint = mode === 'register' ? '/auth/register' : '/auth/login';
-      const payload = mode === 'register' ? { name, email, password } : { email, password };
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.message || 'Não foi possível autenticar.');
-
-      window.location.hash = '#inicio';
-      window.location.reload();
-    } catch (err) {
-      setFormErr(err.message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <section className="glass hot login">
-      <div className="login-tree">
-        <Tree letters={Array(7).fill({})} />
-      </div>
-      <div className="login-copy">
-        <p className="eyebrow">
-          {isPortal ? 'PORTAL DE COMUNIDADES · NATAL 2026' : `COMUNIDADE ${commTag} · NATAL 2026`}
-        </p>
-        <h1>{isPortal ? 'Faça login para acessar' : `Entre na comunidade ${commName}`}</h1>
-        <p className="m">
-          {isPortal
-            ? 'Entre com Discord, Google ou E-mail para visualizar as comunidades disponíveis e participar dos eventos.'
-            : 'Acesse para acompanhar o ranking, próximos eventos, missões diárias e deixar cartinhas na árvore.'}
-        </p>
-
-        {(formErr || oauthErrMsg) && <div className="err">{formErr || oauthErrMsg}</div>}
-
-        <div className="oauth-stack">
-          <a className="btn dc big" href={`/auth/discord?returnTo=${returnTo}`}>
-            <Icon name="discord" size={20} />
-            <span>Entrar com Discord</span>
-          </a>
-
-          <a className="btn google big" href={`/auth/google?returnTo=${returnTo}`}>
-            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-              <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.8C6.2 7.2 8.9 5 12 5z" />
-              <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.6l3.7 2.9c2.2-2 3.7-5 3.7-8.7z" />
-              <path fill="#FBBC05" d="M5.3 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.6 7.4C.6 9.4 0 11.6 0 14s.6 4.6 1.6 6.6l3.7-2.8z" />
-              <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5l-3.7 2.8C3.5 20.9 7.4 24 12 24z" />
-            </svg>
-            <span>Entrar com Google</span>
-          </a>
-
-          <button
-            type="button"
-            className="btn ghost big"
-            onClick={() => {
-              setShowEmail((v) => !v);
-              setFormErr('');
-            }}
-          >
-            <Icon name="mail" size={19} />
-            <span>Entrar com E-mail</span>
-          </button>
-        </div>
-
-        {showEmail && (
-          <div className="email-box">
-            <div className="seg auth-tabs">
-              <button
-                type="button"
-                className={mode === 'login' ? 'on' : ''}
-                onClick={() => { setMode('login'); setFormErr(''); }}
-              >
-                Login
-              </button>
-              <button
-                type="button"
-                className={mode === 'register' ? 'on' : ''}
-                onClick={() => { setMode('register'); setFormErr(''); }}
-              >
-                Criar conta
-              </button>
-            </div>
-
-            <form className="auth-form" onSubmit={handleEmailSubmit}>
-              {mode === 'register' && (
-                <input
-                  type="text"
-                  className="inp"
-                  placeholder="Seu nome ou apelido"
-                  maxLength={40}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                />
-              )}
-
-              <input
-                type="email"
-                className="inp"
-                placeholder="Seu e-mail"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-
-              <input
-                type="password"
-                className="inp"
-                placeholder={mode === 'register' ? 'Crie uma senha (mín. 6 caracteres)' : 'Sua senha'}
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-
-              <button type="submit" className="btn red" disabled={busy}>
-                <span>
-                  {busy
-                    ? 'Aguarde...'
-                    : mode === 'register'
-                    ? 'Criar conta e entrar'
-                    : 'Entrar'}
-                </span>
-              </button>
-            </form>
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
 /* ---------- Tela Principal da Comunidade (/comunidade/:slug/natal) ---------- */
 export function Home({ me, ev, rk, communityMeta, letters, onOpen, onWrite, onMission, onNotify }) {
   const m = ev.missions[Math.max(ev.today, 1) - 1] || ev.missions[0];
@@ -524,14 +725,13 @@ export function Home({ me, ev, rk, communityMeta, letters, onOpen, onWrite, onMi
 
   return (
     <div className="community-hub">
-      {/* Cabeçalho da Comunidade */}
       <section className="glass hot community-hero">
         <div className="comm-hero-top">
           <div>
             <div className="who-name">
               <CommunityTag tag={commTag} theme={commTheme} />
               <span className="badge gold">
-                <Icon name="sparkles" size={13} /> Natal 2026
+                <Icon name="sparkles" size={13} /> Comunidade Oficial
               </span>
             </div>
             <h1 style={{ margin: '8px 0 4px' }}>{commName}</h1>
@@ -551,10 +751,8 @@ export function Home({ me, ev, rk, communityMeta, letters, onOpen, onWrite, onMi
         </div>
       </section>
 
-      {/* Carrossel de Eventos Futuros & Ativos */}
       <EventsCarousel events={communityMeta?.events || []} onNotify={onNotify} />
 
-      {/* Evento Ativo: Natal Mágico (Árvore + Missão do Dia) */}
       <div id="natal-hub" className="home">
         <section className="glass hot">
           <div className="who-name" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
@@ -653,7 +851,6 @@ export function Home({ me, ev, rk, communityMeta, letters, onOpen, onWrite, onMi
         </section>
       </div>
 
-      {/* Ranking da Comunidade */}
       <section className="glass hot">
         <div className="tree-head" style={{ marginBottom: 12 }}>
           <div>
@@ -1048,13 +1245,13 @@ export function GalleryPage({ items = [], me, communityMeta, isAdmin, onOpenForm
     <section className="glass hot gal-page">
       <div className="tree-head">
         <div>
-          <p className="eyebrow">Exposição de Natal</p>
+          <p className="eyebrow">Exposição da Comunidade</p>
           <div className="who-name">
             <h2 style={{ margin: 0 }}>Galeria da Comunidade</h2>
             <CommunityTag tag={communityMeta?.tag || 'COMUNIDADE'} theme={communityMeta?.theme} />
           </div>
           <p className="m">
-            Compartilhe suas artes, fotos e criações natalinas. Todas as publicações passam pela aprovação dos administradores.
+            Compartilhe suas artes, fotos e criações. Todas as publicações passam pela aprovação dos administradores.
           </p>
         </div>
 
@@ -1190,7 +1387,7 @@ export function GalleryModal({ onSubmit }) {
 
   return (
     <form onSubmit={send}>
-      <p className="eyebrow">Galeria de Natal</p>
+      <p className="eyebrow">Galeria da Comunidade</p>
       <h3>Enviar nova arte</h3>
       <p className="m">Sua imagem ficará visível na galeria assim que for aprovada por um administrador.</p>
 
@@ -1250,7 +1447,7 @@ export function GalleryInspectModal({ art }) {
 export function RulesPage() {
   return (
     <section className="glass hot">
-      <p className="eyebrow">O Festival</p>
+      <p className="eyebrow">Regulamento</p>
       <h2>Regras</h2>
       <div id="rules-content" className="empty-slot" />
     </section>

@@ -564,7 +564,7 @@ app.get(
   })
 );
 
-/* ---------- Cadastro e Login com E-mail e Senha ---------- */
+/* ---------- Cadastro e Login com E-mail/Usuário e Senha ---------- */
 app.post(
   '/auth/register',
   strict,
@@ -610,31 +610,30 @@ app.post(
   '/auth/login',
   strict,
   run(async (req, res) => {
-    const email = String(req.body?.email ?? '').trim().toLowerCase();
+    const loginInput = String(req.body?.login ?? req.body?.email ?? '').trim();
     const password = String(req.body?.password ?? '');
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'dados_incompletos', message: 'Preencha e-mail e senha.' });
+    if (!loginInput || !password) {
+      return res.status(400).json({ error: 'dados_incompletos', message: 'Preencha e-mail/usuário e senha.' });
     }
 
-    const { data: user } = await supabase
-      .from('users')
-      .select('id, password_hash, google_id, discord_id')
-      .eq('email', email)
-      .maybeSingle();
+    const query = supabase.from('users').select('id, password_hash, google_id, discord_id');
+    const { data: user } = loginInput.includes('@')
+      ? await query.eq('email', loginInput.toLowerCase()).maybeSingle()
+      : await query.ilike('username', loginInput).limit(1).maybeSingle();
 
     if (!user) {
-      return res.status(401).json({ error: 'credenciais_invalidas', message: 'E-mail ou senha incorretos.' });
+      return res.status(401).json({ error: 'credenciais_invalidas', message: 'Usuário/e-mail ou senha incorretos.' });
     }
     if (!user.password_hash) {
       const metodo = user.google_id ? 'Google' : 'Discord';
       return res.status(400).json({
         error: 'usar_oauth',
-        message: `Esta conta foi criada com ${metodo}. Use o botão "Entrar com ${metodo}".`,
+        message: `Esta conta foi criada com ${metodo}. Continue usando o ícone do ${metodo}.`,
       });
     }
     if (!verifyPassword(password, user.password_hash)) {
-      return res.status(401).json({ error: 'credenciais_invalidas', message: 'E-mail ou senha incorretos.' });
+      return res.status(401).json({ error: 'credenciais_invalidas', message: 'Usuário/e-mail ou senha incorretos.' });
     }
 
     await createSession(res, user.id);
@@ -652,16 +651,6 @@ app.post(
 );
 
 /* ---------- Perfil e Dados da Comunidade ---------- */
-app.get(
-  '/api/me',
-  run(async (req, res) => {
-    const comm = getReqCommunity(req);
-    const meta = getCommunityMeta(comm);
-
-    if (!req.user) {
-      return res.json({ user: null, community: meta });
-    }
-
 app.get(
   '/api/me',
   run(async (req, res) => {
@@ -1131,7 +1120,6 @@ app.delete(
 );
 
 /* ---------- Site, rotas /comunidade/:slug/natal e start ---------- */
-/* ---------- Site, rotas /comunidade/:slug/natal e start ---------- */
 app.get('/healthz', (req, res) => res.json({ ok: true }));
 app.use('/api', (req, res) => res.status(404).json({ error: 'rota_inexistente' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -1162,7 +1150,8 @@ if (!VERCEL) {
   const server = app.listen(PORT, () => {
     const ev = eventState();
     console.log(
-      `\nNatal Mágico no ar!\n` +
+      `\nPortal Vulpora & Natal Mágico no ar!\n` +
+      `• Portal:      http://localhost:${PORT}/comunidade\n` +
       `• The Kingdom: http://localhost:${PORT}/comunidade/thekingdom/natal\n` +
       `• Heaven:      http://localhost:${PORT}/comunidade/heaven/natal\n` +
       `(Evento: ${ev.status}, dia ${ev.today})\n`
