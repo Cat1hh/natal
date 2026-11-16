@@ -618,7 +618,7 @@ export function CommunityPage({ me, rk, communityMeta, onEnterEvent, onNotify })
             <h2>Ranking da Comunidade</h2>
           </div>
         </div>
-        <Ranking rk={rk || { ranking: [] }} />
+        <Ranking rk={rk || { ranking: [] }} isCommunity />
       </section>
     </div>
   );
@@ -1004,9 +1004,24 @@ export function Calendar({ ev, communityMeta, onMission }) {
   );
 }
 
-/* ---------- Ranking (pódio + lista) ---------- */
-/* ---------- Ranking (pódio 1º, 2º e 3º + lista) ---------- */
-export function Ranking({ rk }) {
+/* ---------- Ranking (pódio 1º, 2º e 3º + lista — no evento libera em 26/12) ---------- */
+export function Ranking({ rk, isCommunity = false }) {
+  const isUnlocked = isCommunity || new Date() >= new Date(2026, 11, 26);
+
+  if (!isUnlocked) {
+    return (
+      <div className="rk-locked">
+        <span className="rk-locked-ico" aria-hidden="true">
+          <Icon name="clock" size={22} />
+        </span>
+        <b>Ranking do evento oculto</b>
+        <p className="m">
+          O pódio e a classificação do evento serão revelados apenas no dia <b>26 de dezembro</b>.
+        </p>
+      </div>
+    );
+  }
+
   const list = rk?.ranking || [];
   const top = [1, 0, 2].map((i) => list[i]).filter(Boolean);
 

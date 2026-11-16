@@ -2698,3 +2698,31 @@ textarea {
     padding: 2px 7px;
   }
 }
+.rk-locked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 24px 16px;
+  margin-top: 8px;
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px dashed rgba(244, 165, 29, 0.35);
+}
+
+.rk-locked-ico {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--gold, #F4A51D);
+  background: rgba(244, 165, 29, 0.14);
+  border: 1px solid rgba(244, 165, 29, 0.32);
+}
+
+.rk-locked b {
+  font-size: 15px;
+  color: var(--cream, #F1E4D4);
+}
