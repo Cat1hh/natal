@@ -1005,35 +1005,71 @@ export function Calendar({ ev, communityMeta, onMission }) {
 }
 
 /* ---------- Ranking (pódio + lista) ---------- */
+/* ---------- Ranking (pódio 1º, 2º e 3º + lista) ---------- */
 export function Ranking({ rk }) {
   const list = rk?.ranking || [];
   const top = [1, 0, 2].map((i) => list[i]).filter(Boolean);
+
   return (
-    <>
+    <div className="rk-wrap">
       {!list.length && <p className="m">Ninguém pontuou ainda. Seja a primeira pessoa!</p>}
-      <div className="podium">
-        {top.map((r) => (
-          <div key={r.position} className={`pod p${r.position}`}>
-            <Avatar u={r} />
-            <b className="uname">{r.name}</b>
-            <span>{r.points} pts</span>
-            <div className="step" style={{ color: MEDAL_COLOR[r.position - 1] }}>
-              <Icon name="medal" size={24} />
-            </div>
-          </div>
-        ))}
-      </div>
-      {list.slice(3).map((r) => (
-        <div key={r.position} className="row">
-          <span className="pos">{r.position}</span>
-          <Avatar u={r} />
-          <b className="uname">{r.name}</b>
-          <b className="pts">{r.points} pts</b>
+
+      {top.length > 0 && (
+        <div className="podium" role="list" aria-label="Pódio dos 3 primeiros lugares">
+          {top.map((r) => {
+            const pos = r.position;
+            const color = MEDAL_COLOR[pos - 1] || '#F4A51D';
+
+            return (
+              <div key={pos} role="listitem" className={`pod p${pos}`}>
+                <div className="pod-top">
+                  {pos === 1 && (
+                    <span className="pod-crown" aria-hidden="true">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M2 5l4.5 11h11L22 5l-5.5 5.5L12 4l-4.5 6.5L2 5zm3 14h14v2H5v-2z" />
+                      </svg>
+                    </span>
+                  )}
+
+                  <div className="pod-av-wrap">
+                    <Avatar u={r} />
+                    <span className="pod-rank-pin">{pos}º</span>
+                  </div>
+
+                  <b className="pod-name uname" title={r.name}>
+                    {r.name}
+                  </b>
+                </div>
+
+                <div className="step" style={{ '--medal': color }}>
+                  <span className="step-place">{pos}º</span>
+                  <span className="step-pts">
+                    <Icon name="medal" size={14} />
+                    <span>{r.points} pts</span>
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
-      ))}
+      )}
+
+      {list.slice(3).length > 0 && (
+        <div className="rk-list">
+          {list.slice(3).map((r) => (
+            <div key={r.position} className="row">
+              <span className="pos">{r.position}º</span>
+              <Avatar u={r} />
+              <b className="uname">{r.name}</b>
+              <b className="pts">{r.points} pts</b>
+            </div>
+          ))}
+        </div>
+      )}
+
       {rk?.me && (
         <div className="row me">
-          <span className="pos">{rk.me.position ?? '—'}</span>
+          <span className="pos">{rk.me.position != null ? `${rk.me.position}º` : '—'}</span>
           <span className="av">
             <Icon name="star" size={16} />
           </span>
@@ -1041,7 +1077,7 @@ export function Ranking({ rk }) {
           <b className="pts">{rk.me.points} pts</b>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
