@@ -43,15 +43,6 @@ function TileArt({ type }) {
       return (
         <svg className="t-art" viewBox="0 0 40 40" aria-hidden="true">
           <path d="M8 32 Q20 20 32 8 M14 26 L11 18 M14 26 L22 28 M20 20 L17 12 M20 20 L28 22 M26 14 L23 7 M26 14 L33 16" stroke="var(--gold, #F4A51D)" strokeWidth="1.8" strokeLinecap="round" fill="none" />
-          <circle
-              className="v"
-              cx="50"
-              cy="50"
-              r="42"
-              stroke="var(--gold, #F4A51D)"
-              strokeDasharray={C}
-              strokeDashoffset={C * (1 - me.missionsDone / 25)}
-            />
         </svg>
       );
     case 'snowflake':
@@ -70,74 +61,74 @@ function TileArt({ type }) {
     case 'star':
       return (
         <svg className="t-art" viewBox="0 0 40 40" aria-hidden="true">
-          <path d="M20 5 L24 15 L35 16 L26 23 L29 34 L20 28 L11 34 L14 23 L5 16 L16 15 Z" fill="none" stroke="#F4A51D" strokeWidth="1.8" strokeLinejoin="round" />
+          <path d="M20 5 L24 15 L35 16 L26 23 L29 34 L20 28 L11 34 L14 23 L5 16 L16 15 Z" fill="none" stroke="var(--gold, #F4A51D)" strokeWidth="1.8" strokeLinejoin="round" />
         </svg>
       );
     case 'tree':
       return (
         <svg className="t-art tall-art" viewBox="0 0 50 80" aria-hidden="true">
-          <path d="M25 6 L27 11 L32 11 L28 14 L29 19 L25 16 L21 19 L22 14 L18 11 L23 11 Z" fill="#F4A51D" />
-          <polygon points="25,18 14,34 36,34" fill="#F4A51D" />
-          <polygon points="25,28 11,48 39,48" fill="#F4A51D" />
-          <polygon points="25,40 8,64 42,64" fill="#F4A51D" />
+          <path d="M25 6 L27 11 L32 11 L28 14 L29 19 L25 16 L21 19 L22 14 L18 11 L23 11 Z" fill="var(--gold, #F4A51D)" />
+          <polygon points="25,18 14,34 36,34" fill="var(--gold, #F4A51D)" />
+          <polygon points="25,28 11,48 39,48" fill="var(--gold, #F4A51D)" />
+          <polygon points="25,40 8,64 42,64" fill="var(--gold, #F4A51D)" />
           <rect x="22" y="64" width="6" height="9" fill="#A46227" />
         </svg>
       );
     case 'bell':
       return (
         <svg className="t-art" viewBox="0 0 40 40" aria-hidden="true">
-          <path d="M20 7 C13 7 10 13 10 21 L7 27 L33 27 L30 21 C30 13 27 7 20 7 Z" fill="#F4A51D" />
-          <circle cx="20" cy="30" r="3.2" fill="#F1E4D4" />
+          <path d="M20 7 C13 7 10 13 10 21 L7 27 L33 27 L30 21 C30 13 27 7 20 7 Z" fill="var(--gold, #F4A51D)" />
+          <circle cx="20" cy="30" r="3.2" fill="var(--cream, #F1E4D4)" />
         </svg>
       );
     case 'baubles':
       return (
         <svg className="t-art" viewBox="0 0 44 40" aria-hidden="true">
-          <line x1="14" y1="2" x2="14" y2="12" stroke="#F1E4D4" strokeWidth="1.2" />
-          <circle cx="14" cy="20" r="8" fill="#F4A51D" />
-          <line x1="30" y1="2" x2="30" y2="8" stroke="#F1E4D4" strokeWidth="1.2" />
-          <circle cx="30" cy="14" r="6" fill="#F1E4D4" />
+          <line x1="14" y1="2" x2="14" y2="12" stroke="var(--cream, #F1E4D4)" strokeWidth="1.2" />
+          <circle cx="14" cy="20" r="8" fill="var(--gold, #F4A51D)" />
+          <line x1="30" y1="2" x2="30" y2="8" stroke="var(--cream, #F1E4D4)" strokeWidth="1.2" />
+          <circle cx="30" cy="14" r="6" fill="var(--cream, #F1E4D4)" />
         </svg>
       );
     case 'holly':
       return (
         <svg className="t-art" viewBox="0 0 40 40" aria-hidden="true">
-          <path d="M12 28 Q10 16 22 14 Q24 24 12 28 Z M20 28 Q24 18 34 22 Q30 31 20 28 Z" fill="#F4A51D" />
-          <circle cx="18" cy="28" r="2.4" fill="#A81E23" />
-          <circle cx="22" cy="30" r="2.4" fill="#A81E23" />
+          <path d="M12 28 Q10 16 22 14 Q24 24 12 28 Z M20 28 Q24 18 34 22 Q30 31 20 28 Z" fill="var(--gold, #F4A51D)" />
+          <circle cx="18" cy="28" r="2.4" fill="var(--red, #A81E23)" />
+          <circle cx="22" cy="30" r="2.4" fill="var(--red, #A81E23)" />
         </svg>
       );
     case 'sprig':
       return (
         <svg className="t-art" viewBox="0 0 40 40" aria-hidden="true">
-          <path d="M10 30 Q22 22 30 8" stroke="#F1E4D4" strokeWidth="1.6" fill="none" strokeLinecap="round" />
-          <circle cx="17" cy="19" r="2.5" fill="#F1E4D4" />
-          <circle cx="25" cy="22" r="2.5" fill="#F1E4D4" />
-          <circle cx="24" cy="12" r="2.5" fill="#F1E4D4" />
+          <path d="M10 30 Q22 22 30 8" stroke="var(--cream, #F1E4D4)" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+          <circle cx="17" cy="19" r="2.5" fill="var(--cream, #F1E4D4)" />
+          <circle cx="25" cy="22" r="2.5" fill="var(--cream, #F1E4D4)" />
+          <circle cx="24" cy="12" r="2.5" fill="var(--cream, #F1E4D4)" />
         </svg>
       );
     case 'bow':
       return (
         <svg className="t-art" viewBox="0 0 44 40" aria-hidden="true">
-          <path d="M22 16 C14 8 6 12 10 20 C13 24 19 20 22 16 Z M22 16 C30 8 38 12 34 20 C31 24 25 20 22 16 Z" fill="#F1E4D4" />
-          <path d="M20 18 L13 32 M24 18 L31 32" stroke="#F1E4D4" strokeWidth="2.4" strokeLinecap="round" />
+          <path d="M22 16 C14 8 6 12 10 20 C13 24 19 20 22 16 Z M22 16 C30 8 38 12 34 20 C31 24 25 20 22 16 Z" fill="var(--cream, #F1E4D4)" />
+          <path d="M20 18 L13 32 M24 18 L31 32" stroke="var(--cream, #F1E4D4)" strokeWidth="2.4" strokeLinecap="round" />
         </svg>
       );
     case 'gift':
       return (
         <svg className="t-art" viewBox="0 0 40 40" aria-hidden="true">
-          <rect x="9" y="15" width="22" height="17" rx="2" fill="#F1E4D4" />
-          <rect x="7" y="11" width="26" height="5" rx="1.5" fill="#F4A51D" />
-          <rect x="18" y="11" width="4" height="21" fill="#A81E23" />
+          <rect x="9" y="15" width="22" height="17" rx="2" fill="var(--cream, #F1E4D4)" />
+          <rect x="7" y="11" width="26" height="5" rx="1.5" fill="var(--gold, #F4A51D)" />
+          <rect x="18" y="11" width="4" height="21" fill="var(--red, #A81E23)" />
         </svg>
       );
     case 'finials':
       return (
         <svg className="t-art lg" viewBox="0 0 54 60" aria-hidden="true">
-          <line x1="18" y1="2" x2="18" y2="10" stroke="#F1E4D4" strokeWidth="1.2" />
-          <path d="M18 10 C25 20 25 38 18 52 C11 38 11 20 18 10 Z" fill="#F4A51D" />
-          <line x1="36" y1="2" x2="36" y2="8" stroke="#F1E4D4" strokeWidth="1.2" />
-          <path d="M36 8 C42 17 42 32 36 44 C30 32 30 17 36 8 Z" fill="#F4A51D" />
+          <line x1="18" y1="2" x2="18" y2="10" stroke="var(--cream, #F1E4D4)" strokeWidth="1.2" />
+          <path d="M18 10 C25 20 25 38 18 52 C11 38 11 20 18 10 Z" fill="var(--gold, #F4A51D)" />
+          <line x1="36" y1="2" x2="36" y2="8" stroke="var(--cream, #F1E4D4)" strokeWidth="1.2" />
+          <path d="M36 8 C42 17 42 32 36 44 C30 32 30 17 36 8 Z" fill="var(--gold, #F4A51D)" />
         </svg>
       );
     default:
@@ -299,7 +290,7 @@ export function Home({ me, ev, letters, onOpen, onWrite, onMission }) {
               cx="50"
               cy="50"
               r="42"
-              stroke="#F4A51D"
+              stroke="var(--gold, #F4A51D)"
               strokeDasharray={C}
               strokeDashoffset={C * (1 - me.missionsDone / 25)}
             />
@@ -479,7 +470,7 @@ export function Prizes({ pz, done }) {
         const ok = done >= k.missions;
         return (
           <div key={k.missions} className={`row ${ok ? 'ok' : ''}`}>
-            <span className="pos" style={ok ? { color: '#F4A51D' } : undefined}>
+            <span className="pos" style={ok ? { color: 'var(--gold, #F4A51D)' } : undefined}>
               {ok ? <Icon name="check" size={18} /> : k.missions}
             </span>
             <div>
