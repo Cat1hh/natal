@@ -1931,3 +1931,533 @@ textarea {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+/* ==========================================================================
+   BANNER CARROSSEL DE AVISOS & EVENTOS FUTUROS (PÁGINA DA COMUNIDADE)
+   ========================================================================== */
+.comm-car-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.comm-car-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comm-car-count {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.65);
+  margin-right: 4px;
+}
+
+.comm-car-arrow {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.comm-car-arrow:hover {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(244, 165, 29, 0.5);
+  transform: scale(1.05);
+}
+
+.comm-shell.theme-ducks .comm-car-arrow:hover {
+  border-color: rgba(56, 189, 248, 0.55);
+}
+
+.comm-car-viewport {
+  overflow: hidden;
+  border-radius: 20px;
+}
+
+.comm-car-track {
+  display: flex;
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.comm-car-slide {
+  min-width: 100%;
+  box-sizing: border-box;
+}
+
+.comm-banner-slide {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 26px 28px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.34));
+}
+
+/* Destaque para Evento Ao Vivo */
+.comm-banner-slide.is-live.is-kingdom {
+  background:
+    radial-gradient(circle at 85% 20%, rgba(244, 165, 29, 0.24), transparent 50%),
+    linear-gradient(135deg, rgba(168, 30, 35, 0.36), rgba(20, 8, 13, 0.86));
+  border-color: rgba(244, 165, 29, 0.48);
+}
+
+.comm-banner-slide.is-live.is-heaven {
+  background:
+    radial-gradient(circle at 85% 20%, rgba(56, 189, 248, 0.26), transparent 50%),
+    linear-gradient(135deg, rgba(14, 116, 144, 0.34), rgba(7, 19, 34, 0.88));
+  border-color: rgba(56, 189, 248, 0.48);
+}
+
+/* Visual de Aviso para Eventos Futuros */
+.comm-banner-slide.is-upcoming.is-kingdom {
+  background:
+    radial-gradient(circle at 90% 15%, rgba(244, 165, 29, 0.14), transparent 48%),
+    linear-gradient(135deg, rgba(46, 18, 28, 0.72), rgba(16, 7, 11, 0.86));
+  border-color: rgba(244, 165, 29, 0.26);
+}
+
+.comm-banner-slide.is-upcoming.is-heaven {
+  background:
+    radial-gradient(circle at 90% 15%, rgba(125, 211, 252, 0.15), transparent 48%),
+    linear-gradient(135deg, rgba(16, 40, 68, 0.72), rgba(7, 18, 32, 0.86));
+  border-color: rgba(125, 211, 252, 0.26);
+}
+
+.comm-slide-glow {
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(244, 165, 29, 0.18), transparent 70%);
+  pointer-events: none;
+}
+
+.comm-banner-slide.is-heaven .comm-slide-glow {
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.2), transparent 70%);
+}
+
+.comm-slide-content {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.comm-ev-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.comm-ev-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.comm-ev-badge.live {
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.comm-ev-badge.soon {
+  background: rgba(244, 165, 29, 0.16);
+  color: #fcd34d;
+  border: 1px solid rgba(244, 165, 29, 0.35);
+}
+
+.comm-shell.theme-ducks .comm-ev-badge.soon {
+  background: rgba(56, 189, 248, 0.16);
+  color: #7dd3fc;
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.comm-ev-date {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.comm-slide-content h3 {
+  margin: 2px 0 0;
+  font-size: 1.45rem;
+  line-height: 1.2;
+}
+
+.comm-slide-content p.m {
+  max-width: 620px;
+}
+
+.comm-slide-action {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  min-width: 215px;
+}
+
+.comm-remind-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 48px;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  font: 700 0.9rem Quicksand, sans-serif;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.comm-remind-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(244, 165, 29, 0.55);
+  transform: translateY(-1px);
+}
+
+.comm-shell.theme-ducks .comm-remind-btn:hover {
+  border-color: rgba(56, 189, 248, 0.6);
+}
+
+.comm-remind-btn.is-on {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(34, 197, 94, 0.48);
+  color: #86efac;
+}
+
+.comm-car-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.comm-car-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  border: 0;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.24);
+  cursor: pointer;
+  transition: width 0.22s ease, background 0.22s ease;
+}
+
+.comm-car-dot.on {
+  width: 26px;
+  background: #f4a51d;
+}
+
+.comm-shell.theme-ducks .comm-car-dot.on {
+  background: #38bdf8;
+}
+
+@media (max-width: 720px) {
+  .comm-banner-slide {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 20px 18px;
+    gap: 16px;
+  }
+
+  .comm-slide-action {
+    min-width: 0;
+    width: 100%;
+  }
+}
+/* ==========================================================================
+   BANNER CARROSSEL DE AVISOS & EVENTOS FUTUROS (PÁGINA DA COMUNIDADE)
+   ========================================================================== */
+.comm-car-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.comm-car-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comm-car-count {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.65);
+  margin-right: 4px;
+}
+
+.comm-car-arrow {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.comm-car-arrow:hover {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(244, 165, 29, 0.5);
+  transform: scale(1.05);
+}
+
+.comm-shell.theme-ducks .comm-car-arrow:hover {
+  border-color: rgba(56, 189, 248, 0.55);
+}
+
+.comm-car-viewport {
+  overflow: hidden;
+  border-radius: 20px;
+}
+
+.comm-car-track {
+  display: flex;
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.comm-car-slide {
+  min-width: 100%;
+  box-sizing: border-box;
+}
+
+.comm-banner-slide {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 26px 28px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.34));
+}
+
+.comm-banner-slide.is-live.is-kingdom {
+  background:
+    radial-gradient(circle at 85% 20%, rgba(244, 165, 29, 0.24), transparent 50%),
+    linear-gradient(135deg, rgba(168, 30, 35, 0.36), rgba(20, 8, 13, 0.86));
+  border-color: rgba(244, 165, 29, 0.48);
+}
+
+.comm-banner-slide.is-live.is-heaven {
+  background:
+    radial-gradient(circle at 85% 20%, rgba(56, 189, 248, 0.26), transparent 50%),
+    linear-gradient(135deg, rgba(14, 116, 144, 0.34), rgba(7, 19, 34, 0.88));
+  border-color: rgba(56, 189, 248, 0.48);
+}
+
+.comm-banner-slide.is-upcoming.is-kingdom {
+  background:
+    radial-gradient(circle at 90% 15%, rgba(244, 165, 29, 0.14), transparent 48%),
+    linear-gradient(135deg, rgba(46, 18, 28, 0.72), rgba(16, 7, 11, 0.86));
+  border-color: rgba(244, 165, 29, 0.26);
+}
+
+.comm-banner-slide.is-upcoming.is-heaven {
+  background:
+    radial-gradient(circle at 90% 15%, rgba(125, 211, 252, 0.15), transparent 48%),
+    linear-gradient(135deg, rgba(16, 40, 68, 0.72), rgba(7, 18, 32, 0.86));
+  border-color: rgba(125, 211, 252, 0.26);
+}
+
+.comm-slide-glow {
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(244, 165, 29, 0.18), transparent 70%);
+  pointer-events: none;
+}
+
+.comm-banner-slide.is-heaven .comm-slide-glow {
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.2), transparent 70%);
+}
+
+.comm-slide-content {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.comm-ev-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.comm-ev-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.comm-ev-badge.live {
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.comm-ev-badge.soon {
+  background: rgba(244, 165, 29, 0.16);
+  color: #fcd34d;
+  border: 1px solid rgba(244, 165, 29, 0.35);
+}
+
+.comm-shell.theme-ducks .comm-ev-badge.soon {
+  background: rgba(56, 189, 248, 0.16);
+  color: #7dd3fc;
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.comm-ev-date {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.comm-slide-content h3 {
+  margin: 2px 0 0;
+  font-size: 1.45rem;
+  line-height: 1.2;
+}
+
+.comm-slide-content p.m {
+  max-width: 620px;
+}
+
+.comm-slide-action {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  min-width: 215px;
+}
+
+.comm-remind-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 48px;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  font: 700 0.9rem Quicksand, sans-serif;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.comm-remind-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(244, 165, 29, 0.55);
+  transform: translateY(-1px);
+}
+
+.comm-shell.theme-ducks .comm-remind-btn:hover {
+  border-color: rgba(56, 189, 248, 0.6);
+}
+
+.comm-remind-btn.is-on {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(34, 197, 94, 0.48);
+  color: #86efac;
+}
+
+.comm-car-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.comm-car-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  border: 0;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.24);
+  cursor: pointer;
+  transition: width 0.22s ease, background 0.22s ease;
+}
+
+.comm-car-dot.on {
+  width: 26px;
+  background: #f4a51d;
+}
+
+.comm-shell.theme-ducks .comm-car-dot.on {
+  background: #38bdf8;
+}
+
+@media (max-width: 720px) {
+  .comm-banner-slide {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 20px 18px;
+    gap: 16px;
+  }
+
+  .comm-slide-action {
+    min-width: 0;
+    width: 100%;
+  }
+}
