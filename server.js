@@ -15,9 +15,13 @@ const MISSIONS_BY_COMMUNITY = missionsMod.MISSIONS_BY_COMMUNITY || {
   ducks: MISSIONS,
   kingdom: MISSIONS,
 };
+const PRIZES_BY_COMMUNITY = missionsMod.PRIZES_BY_COMMUNITY || {
+  ducks: PRIZES,
+  kingdom: PRIZES,
+};
 const COMMUNITY_META = missionsMod.COMMUNITY_META || {
-  ducks: { tag: 'DUCKS', name: 'Ducks', currency: 'Ducks' },
-  kingdom: { tag: 'THE KINGDOM', name: 'The Kingdom', currency: 'Pontos' },
+  ducks: { tag: 'DUCKS', name: 'Ducks' },
+  kingdom: { tag: 'THE KINGDOM', name: 'The Kingdom' },
 };
 
 const {
@@ -64,9 +68,13 @@ function eventState() {
   return { status: 'live', today: diff + 1, finale: false };
 }
 
-/* ---------- Helpers do banco (Supabase) ---------- */
-async function getUserStats(uid) {
-  const { data } = await supabase.from('completions').select('points').eq('user_id', uid);
+/* ---------- Helpers do banco (Supabase · isolados por comunidade) ---------- */
+async function getUserStats(uid, community) {
+  const { data } = await supabase
+    .from('completions')
+    .select('points')
+    .eq('user_id', uid)
+    .eq('community', community);
   const rows = data || [];
   return {
     points: rows.reduce((acc, r) => acc + (r.points || 0), 0),
@@ -74,8 +82,13 @@ async function getUserStats(uid) {
   };
 }
 
-async function getDoneDays(uid) {
-  const { data } = await supabase.from('completions').select('day').eq('user_id', uid).order('day');
+async function getDoneDays(uid, community) {
+  const { data } = await supabase
+    .from('completions')
+    .select('day')
+    .eq('user_id', uid)
+    .eq('community', community)
+    .order('day');
   return (data || []).map((r) => r.day);
 }
 
@@ -84,7 +97,10 @@ async function giveCompletion(uid, day, community) {
   const pts = list[day - 1][2];
   const { data, error } = await supabase
     .from('completions')
-    .upsert({ user_id: uid, day, points: pts }, { onConflict: 'user_id,day', ignoreDuplicates: true })
+    .upsert(
+      { user_id: uid, day, points: pts, community },
+      { onConflict: 'user_id,day,community', ignoreDuplicates: true }
+    )
     .select('id');
   if (error) throw error;
   return data && data.length > 0 ? pts : 0;
@@ -93,28 +109,36 @@ async function giveCompletion(uid, day, community) {
 const avatarUrl = (u) =>
   u?.avatar ? `https://cdn.discordapp.com/avatars/${u.discord_id}/${u.avatar}.png?size=128` : null;
 
-/* Verificações automáticas de missão */
+/* Verificações automáticas de missão (isoladas na árvore/desafios da comunidade) */
 const checks = {
   login: async () => true,
   discord: async () => true,
-  letter: async (uid) => {
-    const { count } = await supabase.from('letters').select('id', { count: 'exact', head: true }).eq('user_id', uid);
+  letter: async (uid, community) => {
+    const { count } = await supabase
+      .from('letters')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', uid)
+      .eq('community', community);
     return (count || 0) > 0;
   },
-  reads3: async (uid) => {
-    const { count } = await supabase.from('letter_reads').select('letter_id', { count: 'exact', head: true }).eq('user_id', uid);
+  reads3: async (uid, community) => {
+    const { count } = await supabase
+      .from('letter_reads')
+      .select('letter_id, letters!inner(community)', { count: 'exact', head: true })
+      .eq('user_id', uid)
+      .eq('letters.community', community);
     return (count || 0) >= 3;
   },
-  count10: async (uid) => {
-    const s = await getUserStats(uid);
+  count10: async (uid, community) => {
+    const s = await getUserStats(uid, community);
     return s.missions >= 10;
   },
 };
 
 const checkMsg = {
-  letter: 'Escreva uma cartinha na árvore primeiro.',
-  reads3: 'Leia 3 cartinhas de outras pessoas primeiro.',
-  count10: 'Conclua 10 missões antes desta.',
+  letter: 'Escreva uma cartinha na árvore da sua comunidade primeiro.',
+  reads3: 'Leia 3 cartinhas da árvore da sua comunidade primeiro.',
+  count10: 'Conclua 10 missões da sua comunidade antes desta.',
 };
 
 /* ---------- App e segurança ---------- */
@@ -302,8 +326,14 @@ app.get(
   '/api/me',
   run(async (req, res) => {
     if (!req.user) return res.json({ user: null });
-    const [s, done] = await Promise.all([getUserStats(req.user.id), getDoneDays(req.user.id)]);
-    const meta = COMMUNITY_META[req.user.community] || null;
+    const ev = eventState();
+    const showPoints = Boolean(req.user.isAdmin || ev.finale);
+    const comm = req.user.community;
+    const [s, done] = comm
+      ? await Promise.all([getUserStats(req.user.id, comm), getDoneDays(req.user.id, comm)])
+      : [{ points: 0, missions: 0 }, []];
+    const meta = COMMUNITY_META[comm] || null;
+
     res.json({
       user: {
         id: req.user.id,
@@ -311,12 +341,12 @@ app.get(
         avatar: avatarUrl(req.user),
         discord: { connected: true, id: req.user.discord_id },
         isAdmin: req.user.isAdmin,
-        community: req.user.community,
+        community: comm,
         tag: meta?.tag || null,
         communityName: meta?.name || null,
-        currency: meta?.currency || 'Ducks',
       },
-      points: s.points,
+      points: showPoints ? s.points : null,
+      showPoints,
       missionsDone: s.missions,
       done,
     });
@@ -324,6 +354,7 @@ app.get(
 );
 
 // Define a tag/cargo caso o usuário esteja nos dois servidores (ou para admin alternar)
+// Permite que qualquer participante alterne entre o evento da Ducks e da The Kingdom
 app.post(
   '/api/me/community',
   requireAuth,
@@ -331,9 +362,6 @@ app.post(
     const choice = req.body?.community;
     if (!['ducks', 'kingdom'].includes(choice)) {
       return res.status(400).json({ error: 'comunidade_invalida' });
-    }
-    if (req.user.community && !req.user.isAdmin) {
-      return res.status(409).json({ error: 'tag_ja_definida', message: 'Sua tag de evento já está travada.' });
     }
     const { error } = await supabase.from('users').update({ community: choice }).eq('id', req.user.id);
     if (error) throw error;
@@ -354,12 +382,17 @@ app.get(
     const list = getMissionsFor(community);
     const subs = new Map();
     const [doneDays, { data: subRows }] = await Promise.all([
-      getDoneDays(req.user.id),
-      supabase.from('submissions').select('day, status').eq('user_id', req.user.id),
+      getDoneDays(req.user.id, community),
+      supabase
+        .from('submissions')
+        .select('day, status')
+        .eq('user_id', req.user.id)
+        .eq('community', community),
     ]);
     const done = new Set(doneDays);
     (subRows || []).forEach((s) => subs.set(s.day, s.status));
 
+    const showPoints = Boolean(req.user?.isAdmin || ev.finale);
     const missions = list.map(([title, objective, points, verify], i) => {
       const day = i + 1;
       let status;
@@ -368,7 +401,14 @@ app.get(
       else if (subs.get(day) === 'pending') status = 'pending';
       else if (subs.get(day) === 'rejected') status = 'rejected';
       else status = day === ev.today && ev.status === 'live' ? 'today' : 'open';
-      return { day, title, objective, points, status, needsReview: verify === 'review' };
+      return {
+        day,
+        title,
+        objective,
+        points: showPoints ? points : null,
+        status,
+        needsReview: verify === 'review',
+      };
     });
 
     res.json({ status: ev.status, today: ev.today, finale: ev.finale, start: EVENT_START, community, missions });
@@ -382,7 +422,8 @@ app.post(
   requireCommunity,
   run(async (req, res) => {
     const day = parseInt(req.params.day, 10);
-    const list = getMissionsFor(req.user.community);
+    const community = req.user.community;
+    const list = getMissionsFor(community);
     const m = list[day - 1];
     if (!m) return res.status(404).json({ error: 'missao_inexistente' });
 
@@ -396,6 +437,7 @@ app.post(
       .select('id')
       .eq('user_id', uid)
       .eq('day', day)
+      .eq('community', community)
       .maybeSingle();
     if (existing) return res.status(409).json({ error: 'ja_concluida' });
 
@@ -410,6 +452,7 @@ app.post(
         .select('status')
         .eq('user_id', uid)
         .eq('day', day)
+        .eq('community', community)
         .maybeSingle();
 
       if (curSub && curSub.status !== 'rejected') {
@@ -418,16 +461,25 @@ app.post(
 
       await supabase
         .from('submissions')
-        .upsert({ user_id: uid, day, proof, status: 'pending' }, { onConflict: 'user_id,day' });
+        .upsert(
+          { user_id: uid, day, proof, status: 'pending', community },
+          { onConflict: 'user_id,day,community' }
+        );
       return res.status(202).json({ status: 'pending' });
     }
 
-    if (!(await checks[verify](uid))) {
+    if (!(await checks[verify](uid, community))) {
       return res.status(400).json({ error: 'requisito_pendente', message: checkMsg[verify] });
     }
-    const points = await giveCompletion(uid, day, req.user.community);
-    const stats = await getUserStats(uid);
-    res.json({ status: 'done', points, total: stats.points });
+    const points = await giveCompletion(uid, day, community);
+    const stats = await getUserStats(uid, community);
+    const showPoints = Boolean(req.user.isAdmin || ev.finale);
+
+    res.json({
+      status: 'done',
+      points: showPoints ? points : null,
+      total: showPoints ? stats.points : null,
+    });
   })
 );
 
@@ -446,7 +498,7 @@ app.get(
     const { data: rows } = await supabase
       .from('completions')
       .select('user_id, points, created_at, users!inner(username, discord_id, avatar, community)')
-      .eq('users.community', community);
+      .eq('community', community);
 
     const map = new Map();
     for (const r of rows || []) {
@@ -456,7 +508,7 @@ app.get(
         name: r.users.username,
         discord_id: r.users.discord_id,
         avatar: r.users.avatar,
-        community: r.users.community,
+        community,
         total: 0,
         missions: 0,
         last: r.created_at,
@@ -478,7 +530,7 @@ app.get(
     }));
 
     const idx = sorted.findIndex((r) => r.user_id === req.user.id);
-    const s = await getUserStats(req.user.id);
+    const s = await getUserStats(req.user.id, community);
     const me = { points: s.points, missions: s.missions, position: idx >= 0 ? idx + 1 : null };
 
     res.json({ ranking, me, community });
@@ -490,7 +542,8 @@ app.get('/api/prizes', requireAuth, (req, res) => {
   if (!req.user.isAdmin && !ev.finale) {
     return res.status(403).json({ error: 'premios_ocultos', message: 'As premiações abrem no dia 26!' });
   }
-  res.json({ prizes: PRIZES, milestones: MILESTONES });
+  const community = req.user.community || 'ducks';
+  res.json({ prizes: PRIZES_BY_COMMUNITY[community] || PRIZES, milestones: MILESTONES });
 });
 
 /* ---------- Árvore de cartinhas (isolada por comunidade) ---------- */
@@ -535,6 +588,7 @@ app.post(
       .from('letters')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', req.user.id)
+      .eq('community', req.user.community)
       .gt('created_at', since);
 
     if ((count || 0) >= 3) {
@@ -556,13 +610,16 @@ app.post(
 app.post(
   '/api/letters/:id/read',
   requireAuth,
+  requireCommunity,
   run(async (req, res) => {
     const id = parseInt(req.params.id, 10);
+    const community = req.user.community;
     const { data: l } = await supabase
       .from('letters')
       .select('user_id')
       .eq('id', id)
       .eq('hidden', false)
+      .eq('community', community)
       .maybeSingle();
     if (!l) return res.status(404).json({ error: 'cartinha_inexistente' });
 
@@ -573,8 +630,9 @@ app.post(
     }
     const { count } = await supabase
       .from('letter_reads')
-      .select('letter_id', { count: 'exact', head: true })
-      .eq('user_id', req.user.id);
+      .select('letter_id, letters!inner(community)', { count: 'exact', head: true })
+      .eq('user_id', req.user.id)
+      .eq('letters.community', community);
     res.json({ reads: count || 0 });
   })
 );
@@ -690,12 +748,18 @@ app.get(
   requireAdmin,
   run(async (req, res) => {
     const status = req.query.status === 'rejected' ? 'rejected' : 'pending';
-    const { data } = await supabase
+    let query = supabase
       .from('submissions')
-      .select('id, day, proof, status, created_at, users(username, discord_id, community)')
+      .select('id, day, proof, status, community, created_at, users(username, discord_id, community)')
       .eq('status', status)
       .order('id')
       .limit(100);
+
+    if (req.user.community) {
+      query = query.eq('community', req.user.community);
+    }
+
+    const { data } = await query;
 
     const submissions = (data || []).map((s) => ({
       id: s.id,
@@ -705,7 +769,7 @@ app.get(
       created_at: s.created_at,
       username: s.users?.username,
       discord_id: s.users?.discord_id,
-      community: s.users?.community,
+      community: s.community || s.users?.community,
     }));
     res.json({ submissions });
   })
@@ -731,7 +795,9 @@ app.post(
       .from('submissions')
       .update({ status: action === 'approve' ? 'approved' : 'rejected' })
       .eq('id', s.id);
-    if (action === 'approve') await giveCompletion(s.user_id, s.day, s.users?.community || 'ducks');
+    if (action === 'approve') {
+      await giveCompletion(s.user_id, s.day, s.community || s.users?.community || 'ducks');
+    }
     res.json({ ok: true });
   })
 );

@@ -71,12 +71,16 @@ function Side({ rk, pz, done, showPrizes }) {
 }
 
 /* ---------- Página Exclusiva da Árvore ---------- */
-export function TreePage({ letters = [], onOpen, onWrite }) {
+export function TreePage({ letters = [], community, onOpen, onWrite }) {
   const [page, setPage] = useState(0);
   const total = letters.length;
   const pages = Math.max(1, Math.ceil(total / 12));
   const current = page % pages;
   const visible = letters.slice(current * 12, current * 12 + 12);
+
+  useEffect(() => {
+    setPage(0);
+  }, [community]);
 
   const openRandom = () => {
     if (!total) return;
@@ -88,8 +92,15 @@ export function TreePage({ letters = [], onOpen, onWrite }) {
     <section className="glass hot tree-page">
       <div className="tree-head">
         <div>
-          <p className="eyebrow">Correio de Natal</p>
-          <h2>A Árvore das Cartinhas</h2>
+          <p className="eyebrow">
+            Correio de Natal · {community === 'kingdom' ? 'THE KINGDOM' : 'DUCKS'}
+          </p>
+          <div className="who-name">
+            <h2 style={{ margin: 0 }}>
+              Árvore {community === 'kingdom' ? 'da The Kingdom' : 'da Ducks'}
+            </h2>
+            <CommunityTag community={community} />
+          </div>
           <p className="m">
             Toque em qualquer envelope pendurado nos galhos para ler uma mensagem ou deixe a sua.
           </p>
@@ -230,6 +241,7 @@ export default function App() {
   ];
 
   const selectCommunity = async (community) => {
+    if (community === me?.user?.community) return;
     try {
       const res = await fetch('/api/me/community', {
         method: 'POST',
@@ -238,8 +250,9 @@ export default function App() {
         body: JSON.stringify({ community }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.message || 'Erro ao vincular comunidade.');
-      say(`Tag ${community === 'kingdom' ? 'THE KINGDOM' : 'DUCKS'} vinculada ao seu perfil!`);
+      if (!res.ok) throw new Error(data.message || 'Erro ao trocar de evento.');
+      setModal(null);
+      say(`Você entrou no evento ${community === 'kingdom' ? 'The Kingdom' : 'Ducks'}!`);
       await load();
     } catch (e) {
       say(e.message);
@@ -256,7 +269,9 @@ export default function App() {
       }
       setModal(null);
       await load();
-    } catch (e) { say(e.message); }
+    } catch (e) {
+      say(e.message);
+    }
   };
 
   const write = async (text, anonymous) => {
@@ -330,8 +345,22 @@ export default function App() {
     }
   };
 
-  const openLetter = (l) => { setModal({ t: 'letter', l }); api.readLetter(l.id).catch(() => {}); };
-  const logout = async () => { await api.logout().catch(() => {}); setMe(null); setModal(null); };
+  const openLetter = (l) => {
+    setModal({ t: 'letter', l });
+    api.readLetter(l.id).catch(() => {});
+  };
+
+  const logout = async () => {
+    await api.logout().catch(() => {});
+    setMe(null);
+    setEv(null);
+    setRk(null);
+    setPz(null);
+    setLetters([]);
+    setGallery([]);
+    setModal(null);
+  };
+
   const openMission = (m) => setModal({ t: 'mission', day: m.day });
 
   const activeTab = tabs.find(([id]) => id === route) ? route : 'inicio';
@@ -344,7 +373,14 @@ export default function App() {
   else if (!ev) view = <p className="m center pad">Carregando…</p>;
   else {
     view =
-      activeTab === 'arvore' ? <TreePage letters={letters} onOpen={openLetter} onWrite={() => setModal({ t: 'write' })} /> :
+      activeTab === 'arvore' ? (
+        <TreePage
+          letters={letters}
+          community={me.user.community}
+          onOpen={openLetter}
+          onWrite={() => setModal({ t: 'write' })}
+        />
+      ) :
       activeTab === 'calendario' ? <Calendar ev={ev} onMission={openMission} /> :
       activeTab === 'galeria' ? (
         <GalleryPage
@@ -360,7 +396,14 @@ export default function App() {
       activeTab === 'suporte' ? <SupportPage /> :
       activeTab === 'ranking' && canSeeRanking ? <section className="glass hot"><h2>Ranking do Natal</h2><Ranking rk={rk} /></section> :
       activeTab === 'premios' && canSeePrizes ? <section className="glass hot"><h2>Premiações</h2><Prizes pz={pz} done={me.missionsDone} /></section> :
-      activeTab === 'perfil' ? <Profile me={me} rk={canSeeRanking ? rk : null} onLogout={logout} /> :
+      activeTab === 'perfil' ? (
+        <Profile
+          me={me}
+          rk={canSeeRanking ? rk : null}
+          onLogout={logout}
+          onSwitchCommunity={selectCommunity}
+        />
+      ) :
       <Home me={me} ev={ev} letters={letters} onOpen={openLetter} onWrite={() => setModal({ t: 'write' })} onMission={openMission} />;
   }
 
@@ -448,12 +491,37 @@ export default function App() {
                 <b>{currentTabLabel}</b>
               </div>
 
-              <a href="#perfil" className="chip" title="Ver perfil">
-                <Avatar u={me.user} />
-                <span className="uname">{me.user.name}</span>
-                <CommunityTag community={me.user.community} />
-                {me.points != null && <span>· {me.points} pts</span>}
-              </a>
+              <div className="topbar-right">
+                {me.user.community && (
+                  <div className="event-switch" role="group" aria-label="Alternar evento">
+                    <button
+                      type="button"
+                      className={`ev-btn ducks ${me.user.community === 'ducks' ? 'on' : ''}`}
+                      onClick={() => selectCommunity('ducks')}
+                      title="Participar do evento da Ducks"
+                    >
+                      <i className="comm-dot" />
+                      <span>Ducks</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`ev-btn kingdom ${me.user.community === 'kingdom' ? 'on' : ''}`}
+                      onClick={() => selectCommunity('kingdom')}
+                      title="Participar do evento da The Kingdom"
+                    >
+                      <i className="comm-dot" />
+                      <span>The Kingdom</span>
+                    </button>
+                  </div>
+                )}
+
+                <a href="#perfil" className="chip" title="Ver perfil">
+                  <Avatar u={me.user} />
+                  <span className="uname">{me.user.name}</span>
+                  <CommunityTag community={me.user.community} />
+                  {me.points != null && <span>· {me.points} pts</span>}
+                </a>
+              </div>
             </header>
 
             <div className={showRightWidget ? 'layout' : ''}>

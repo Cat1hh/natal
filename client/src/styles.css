@@ -1197,3 +1197,71 @@ textarea { width: 100%; margin-top: 8px; padding: 12px; border-radius: 14px; bor
   background: #E7B95A;
   box-shadow: 0 0 7px #E7B95A;
 }
+/* Seletor rápido de evento na topbar */
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.event-switch {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(12, 16, 28, 0.55);
+  border: 1px solid var(--line);
+  gap: 2px;
+}
+
+.ev-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: 700 11.5px Quicksand, system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.ev-btn:hover {
+  color: var(--cream);
+}
+
+.ev-btn.ducks .comm-dot {
+  background: #E7B95A;
+}
+.ev-btn.ducks.on {
+  color: #E7B95A;
+  background: rgba(33, 70, 100, 0.85);
+  border-color: rgba(122, 171, 195, 0.45);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+.ev-btn.kingdom .comm-dot {
+  background: #e05c61;
+}
+.ev-btn.kingdom.on {
+  color: #f7c4c6;
+  background: rgba(168, 30, 35, 0.52);
+  border-color: rgba(224, 92, 97, 0.55);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* Destaque do evento ativo no Perfil */
+.profile-events {
+  margin-top: 10px;
+  margin-bottom: 18px;
+}
+
+.comm-card.active {
+  border-color: var(--gold);
+  background: rgba(244, 165, 29, 0.1);
+  cursor: default;
+}

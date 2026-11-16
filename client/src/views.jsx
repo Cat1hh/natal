@@ -159,7 +159,7 @@ export function CommunityTag({ community }) {
   );
 }
 
-/* ---------- Escolha de comunidade (membros nos 2 servidores) ---------- */
+/* ---------- Escolha inicial (membros nos 2 servidores) ---------- */
 export function ChooseCommunity({ onSelect }) {
   const [busy, setBusy] = useState(false);
 
@@ -176,9 +176,9 @@ export function ChooseCommunity({ onSelect }) {
   return (
     <section className="glass hot choose-comm">
       <p className="eyebrow">Identificação de Servidor</p>
-      <h2>Escolha o seu lado no festival</h2>
+      <h2>Escolha por qual evento começar</h2>
       <p className="m">
-        Identificamos que você faz parte dos dois servidores no Discord. Como os eventos são separados, escolha em qual comunidade você vai participar (a tag ficará vinculada ao seu perfil):
+        Identificamos que você faz parte dos dois servidores no Discord. Escolha em qual evento deseja entrar agora — você poderá alternar entre os dois a qualquer momento pelo topo do site ou no seu perfil:
       </p>
 
       <div className="comm-grid">
@@ -234,6 +234,7 @@ export function Home({ me, ev, letters, onOpen, onWrite, onMission }) {
   const m = ev.missions[Math.max(ev.today, 1) - 1] || ev.missions[0];
   const C = 2 * Math.PI * 42;
   const rest = Math.max(0, 25 - ev.today);
+  const isKingdom = me.user?.community === 'kingdom';
 
   const eyebrow =
     ev.status === 'before'
@@ -247,8 +248,15 @@ export function Home({ me, ev, letters, onOpen, onWrite, onMission }) {
   return (
     <div className="home">
       <section className="glass hot">
-        <h2>A Árvore das Cartinhas</h2>
-        <p className="m">Pendure uma mensagem para alguém que precisa ler. Toque num envelope na árvore para abrir.</p>
+        <div className="who-name" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
+          <h2 style={{ margin: 0 }}>
+            Árvore {isKingdom ? 'da The Kingdom' : 'da Ducks'}
+          </h2>
+          <CommunityTag community={me.user?.community} />
+        </div>
+        <p className="m">
+          Cartinhas exclusivas {isKingdom ? 'da The Kingdom' : 'da Ducks'}. Toque num envelope na árvore para abrir.
+        </p>
         <Tree letters={letters} onOpen={onOpen} />
 
         {letters.length > 0 && (
@@ -342,12 +350,17 @@ export function Home({ me, ev, letters, onOpen, onWrite, onMission }) {
 
 /* ---------- Calendário do Advento (Mosaico) ---------- */
 export function Calendar({ ev, onMission }) {
+  const isKingdom = ev.community === 'kingdom';
   return (
     <section className="glass hot cal-sec">
       <div className="cal-head">
-        <p className="eyebrow">Dezembro 2026</p>
+        <p className="eyebrow">
+          Dezembro 2026 · {isKingdom ? 'THE KINGDOM' : 'DUCKS'}
+        </p>
         <h2>Calendário Mágico</h2>
-        <p className="m">Uma porta nova se abre a cada dia. Passe o mouse ou toque para espiar a missão.</p>
+        <p className="m">
+          Desafios exclusivos {isKingdom ? 'da The Kingdom' : 'da Ducks'}. Uma porta nova se abre a cada dia.
+        </p>
       </div>
 
       <div className="advent-board">
@@ -487,10 +500,21 @@ export function Prizes({ pz, done }) {
 }
 
 /* ---------- Perfil ---------- */
-export function Profile({ me, onLogout }) {
+export function Profile({ me, onLogout, onSwitchCommunity }) {
   const [, setTick] = useState(0);
+  const [switching, setSwitching] = useState(false);
   const storageKey = me?.user?.id ? `avatar_${me.user.id}` : null;
   const hasCustom = Boolean(storageKey && localStorage.getItem(storageKey));
+
+  const switchTo = async (comm) => {
+    if (switching || !onSwitchCommunity || comm === me.user.community) return;
+    setSwitching(true);
+    try {
+      await onSwitchCommunity(comm);
+    } finally {
+      setSwitching(false);
+    }
+  };
 
   const changeAvatar = (e) => {
     const f = e.target.files?.[0];
@@ -538,7 +562,7 @@ export function Profile({ me, onLogout }) {
             <CommunityTag community={me.user.community} />
           </div>
           <p className="m">
-            {me.missionsDone} de 25 missões concluídas
+            {me.missionsDone} de 25 missões concluídas neste evento
             {me.points != null ? ` · ${me.points} pontos` : ''}
           </p>
           <div className="av-actions">
@@ -557,6 +581,49 @@ export function Profile({ me, onLogout }) {
       <div className="bar">
         <i style={{ width: `${(me.missionsDone / 25) * 100}%` }} />
       </div>
+
+      <h3>Trocar de evento</h3>
+      <p className="m">
+        Você pode participar dos dois eventos! Seu progresso, cartinhas e ranking ficam salvos separadamente em cada servidor.
+      </p>
+      <div className="comm-grid profile-events">
+        <button
+          type="button"
+          className={`comm-card ducks ${me.user.community === 'ducks' ? 'active' : ''}`}
+          disabled={switching || me.user.community === 'ducks'}
+          onClick={() => switchTo('ducks')}
+        >
+          <div className="who-name" style={{ justifyContent: 'space-between', width: '100%' }}>
+            <CommunityTag community="ducks" />
+            {me.user.community === 'ducks' && <span className="badge pine">Ativo agora</span>}
+          </div>
+          <b>Evento Ducks</b>
+          <small className="m">
+            {me.user.community === 'ducks'
+              ? 'Você está visualizando as missões e a árvore da Ducks.'
+              : 'Clique para entrar e participar do evento da Ducks.'}
+          </small>
+        </button>
+
+        <button
+          type="button"
+          className={`comm-card kingdom ${me.user.community === 'kingdom' ? 'active' : ''}`}
+          disabled={switching || me.user.community === 'kingdom'}
+          onClick={() => switchTo('kingdom')}
+        >
+          <div className="who-name" style={{ justifyContent: 'space-between', width: '100%' }}>
+            <CommunityTag community="kingdom" />
+            {me.user.community === 'kingdom' && <span className="badge pine">Ativo agora</span>}
+          </div>
+          <b>Evento The Kingdom</b>
+          <small className="m">
+            {me.user.community === 'kingdom'
+              ? 'Você está visualizando as missões e a árvore da The Kingdom.'
+              : 'Clique para entrar e participar do evento da The Kingdom.'}
+          </small>
+        </button>
+      </div>
+
       <h3>Discord</h3>
       <div className="row ok">
         <span className="medal">
@@ -640,7 +707,7 @@ export function WriteModal({ authorName, onSend }) {
   return (
     <>
       <h3>Escrever cartinha</h3>
-      <p className="m">Ela fica pendurada na árvore para alguém ler.</p>
+      <p className="m">Ela fica pendurada na árvore da sua comunidade para alguém ler.</p>
 
       <div className="write-author">
         <Icon name="mail" size={15} />
@@ -706,7 +773,10 @@ export function GalleryPage({ items = [], me, isAdmin, onOpenForm, onReview, onI
       <div className="tree-head">
         <div>
           <p className="eyebrow">Exposição de Natal</p>
-          <h2>Galeria da Comunidade</h2>
+          <div className="who-name">
+            <h2 style={{ margin: 0 }}>Galeria da Comunidade</h2>
+            <CommunityTag community={me?.user?.community} />
+          </div>
           <p className="m">
             Compartilhe suas artes, fotos e criações natalinas. Todas as publicações passam pela aprovação dos administradores.
           </p>
