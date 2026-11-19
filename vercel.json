@@ -1,10 +1,13 @@
 {
   "version": 2,
-  "buildCommand": "npm install && npm --prefix client install && npm --prefix client run build",
+  "framework": null,
+  "installCommand": "npm install && npm --prefix client install",
+  "buildCommand": "npm --prefix client run build",
   "outputDirectory": "public",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.js" },
     { "source": "/auth/(.*)", "destination": "/api/index.js" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/comunidade/:slug/natal", "destination": "/natal.html" },
+    { "source": "/comunidade/:path*", "destination": "/index.html" }
   ]
 }

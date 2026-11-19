@@ -14,12 +14,24 @@ const { MISSIONS, PRIZES, MILESTONES } = missionsMod;
 
 const DEFAULT_COMMUNITY = 'thekingdom';
 
-const COMMUNITIES = {
+const FALLBACK_COMMUNITIES = {
   thekingdom: {
     slug: 'thekingdom',
     tag: 'THE KINGDOM',
     name: 'The Kingdom',
+    description: 'Um reino de encontros, conquistas e histórias compartilhadas.',
     theme: 'kingdom',
+    members: 128,
+    visualTheme: {
+      primary: '#101d2d',
+      secondary: '#223c52',
+      accent: '#f3cf8a',
+      font: 'Georgia',
+      hero: 'O reino espera por você',
+      subtitle: 'Onde cada membro faz parte de uma grande história.',
+      symbol: '♛',
+      cover: '',
+    },
     subtitle: 'Comunidade oficial · Eventos, desafios e recompensas exclusivas',
     events: [
       {
@@ -29,6 +41,7 @@ const COMMUNITIES = {
         badge: 'AO VIVO AGORA',
         status: 'live',
         date: '01 Dez – 25 Dez',
+        isoDate: '2026-12-01T00:00',
         description: '25 dias de missões diárias, árvore de cartinhas da comunidade e premiações especiais.',
         cta: 'Entrar no Evento',
         path: '/comunidade/thekingdom/natal',
@@ -39,16 +52,8 @@ const COMMUNITIES = {
         badge: 'EM BREVE',
         status: 'upcoming',
         date: '28 Dez – 03 Jan',
+        isoDate: '2026-12-28T20:00',
         description: 'Retrospectiva do reino, sorteios relâmpago no Discord e insígnia exclusiva de Ano Novo.',
-        cta: 'Avise-me',
-      },
-      {
-        id: 'copa-kingdom',
-        title: 'Torneio das Casas',
-        badge: 'JANEIRO 2027',
-        status: 'upcoming',
-        date: '15 Jan – 30 Jan',
-        description: 'Disputa entre equipes com minigames, desafios criativos e ranking geral da comunidade.',
         cta: 'Avise-me',
       },
     ],
@@ -57,7 +62,19 @@ const COMMUNITIES = {
     slug: 'heaven',
     tag: 'HEAVEN',
     name: 'Heaven',
+    description: 'Um espaço para imaginar, compartilhar e explorar novas experiências.',
     theme: 'ducks',
+    members: 42,
+    visualTheme: {
+      primary: '#102939',
+      secondary: '#20495c',
+      accent: '#8febed',
+      font: 'Arial',
+      hero: 'Novos mundos começam aqui',
+      subtitle: 'Uma comunidade que brilha com suas próprias ideias.',
+      symbol: '✧',
+      cover: '',
+    },
     subtitle: 'Comunidade oficial Heaven · Eventos, desafios e recompensas exclusivas',
     events: [
       {
@@ -67,6 +84,7 @@ const COMMUNITIES = {
         badge: 'AO VIVO AGORA',
         status: 'live',
         date: '01 Dez – 25 Dez',
+        isoDate: '2026-12-01T00:00',
         description: '25 dias de missões diárias, árvore de cartinhas da Heaven e premiações exclusivas.',
         cta: 'Entrar no Evento',
         path: '/comunidade/heaven/natal',
@@ -77,21 +95,67 @@ const COMMUNITIES = {
         badge: 'EM BREVE',
         status: 'upcoming',
         date: '28 Dez – 03 Jan',
+        isoDate: '2026-12-28T20:00',
         description: 'Celebração de fim de ano da Heaven com sorteios no Discord e insígnia especial.',
-        cta: 'Avise-me',
-      },
-      {
-        id: 'copa-heaven',
-        title: 'Copa Heaven · Verão 2027',
-        badge: 'JANEIRO 2027',
-        status: 'upcoming',
-        date: '15 Jan – 30 Jan',
-        description: 'Torneio comunitário com minigames, desafios em equipe e ranking da Heaven.',
         cta: 'Avise-me',
       },
     ],
   },
 };
+
+function normalizeEventPath(rawPath, communitySlug, eventSlug) {
+  const fallback = eventSlug ? `/comunidade/${communitySlug}/${eventSlug}` : undefined;
+  const val = String(rawPath || fallback || '').trim();
+  if (!val) return undefined;
+  return val
+    .replace(/^\/#/, '')
+    .replace(/^\/comunidade\/ducks(?=\/|$)/i, '/comunidade/heaven');
+}
+
+function mapCommunityRow(row) {
+  const events = Array.isArray(row.events) ? row.events : [];
+  return {
+    slug: row.slug,
+    tag: row.tag || row.name.toUpperCase(),
+    name: row.name,
+    description: row.description,
+    subtitle: row.subtitle || 'Comunidade oficial · Eventos, desafios e recompensas exclusivas',
+    owner: row.owner_name || 'VULPORA',
+    status: row.status || 'ativa',
+    visibility: row.visibility || 'publica',
+    entry: row.entry_mode || 'livre',
+    members: row.members_count ?? 0,
+    theme: row.slug === 'heaven' ? 'ducks' : 'kingdom',
+    visualTheme: {
+      primary: row.primary_color || '#140b2b',
+      secondary: row.secondary_color || '#12283d',
+      accent: row.accent_color || '#f3cf8a',
+      font: 'Georgia',
+      hero: row.hero_title || 'Onde a magia e a comunidade se encontram',
+      subtitle: row.hero_subtitle || 'Participe dos eventos oficiais e celebrações.',
+      symbol: row.symbol || '✦',
+      cover: row.cover_url || '',
+    },
+    events: events.map((ev) => ({
+      ...ev,
+      path: normalizeEventPath(ev.path, row.slug, ev.slug),
+    })),
+  };
+}
+
+async function fetchAllCommunities() {
+  const { data, error } = await supabase
+    .from('communities')
+    .select('*')
+    .order('created_at', { ascending: true });
+
+  if (!error && Array.isArray(data) && data.length > 0) {
+    const map = {};
+    for (const row of data) map[row.slug] = mapCommunityRow(row);
+    return map;
+  }
+  return FALLBACK_COMMUNITIES;
+}
 
 const {
   PORT = 3000,
@@ -119,7 +183,14 @@ const ADMIN_EMAIL_SET = new Set(
 );
 const SESSION_MS = 30 * 24 * 3600 * 1000;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PUBLIC_DIR = path.join(__dirname, 'public');
+const CLIENT_DIR = path.join(__dirname, 'client');
+const CLIENT_PUBLIC_DIR = path.join(CLIENT_DIR, 'public');
+const CLIENT_DIST_DIR = path.join(CLIENT_DIR, 'dist');
 const run = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+const memoryMemberships = new Map();
+const memoryMessages = [];
 
 function normalizeSlug(raw) {
   const clean = String(raw || '')
@@ -130,7 +201,7 @@ function normalizeSlug(raw) {
 }
 
 function extractCommunityFromPath(urlOrPath) {
-  const match = String(urlOrPath || '').match(/\/comunidade\/([^/?#]+)/i);
+  const match = String(urlOrPath || '').match(/(?:#)?\/comunidade\/([^/?#]+)/i);
   return normalizeSlug(match?.[1]);
 }
 
@@ -142,30 +213,49 @@ function getReqCommunity(req) {
   );
 }
 
-function getCommunityMeta(slug) {
+async function getCommunityMeta(slug) {
   const key = normalizeSlug(slug);
-  if (COMMUNITIES[key]) return COMMUNITIES[key];
+  const all = await fetchAllCommunities();
+  if (all[key]) return all[key];
+
   const label = key.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const base = all[DEFAULT_COMMUNITY] || FALLBACK_COMMUNITIES[DEFAULT_COMMUNITY];
   return {
     slug: key,
     tag: label.toUpperCase(),
     name: label,
+    description: `Comunidade oficial ${label}`,
     theme: 'kingdom',
+    members: 1,
+    visualTheme: base.visualTheme,
     subtitle: 'Comunidade oficial · Eventos, desafios e recompensas',
-    events: COMMUNITIES[DEFAULT_COMMUNITY].events.map((ev) => ({
+    events: base.events.map((ev) => ({
       ...ev,
       path: ev.slug ? `/comunidade/${key}/${ev.slug}` : undefined,
     })),
   };
 }
 
-function safeReturnPath(raw, fallback = '/comunidade') {
+function safeReturnPath(raw, fallback = '/#/portal/comunidades') {
   const val = String(raw || '').trim();
-  if (!val || val === '/') return '/comunidade';
+  if (!val) return fallback;
   if (val.startsWith('/') && !val.startsWith('//')) {
-    return val.replace(/^\/comunidade\/ducks(?=\/|$)/i, '/comunidade/heaven');
+    const normalized = val.replace(/^(\/#)?\/comunidade\/ducks(?=\/|$)/i, '$1/comunidade/heaven');
+    // Rotas do evento (/natal) permanecem sem # para carregar o React do evento
+    if (/^\/comunidade\/[^/]+\/natal(\/|$)/i.test(normalized)) {
+      return normalized;
+    }
+    // Rotas do portal usam sempre /#/...
+    if (normalized !== '/' && !normalized.startsWith('/#')) {
+      return `/#${normalized}`;
+    }
+    return normalized;
   }
   return fallback;
+}
+
+function oauthErrorRedirect(code) {
+  return `/?erro=${encodeURIComponent(code)}#/login`;
 }
 
 const isUserAdmin = (u) =>
@@ -265,6 +355,17 @@ const avatarUrl = (u) => {
     : null;
 };
 
+function formatPortalUser(u) {
+  if (!u) return null;
+  return {
+    id: u.id,
+    name: u.username,
+    email: u.email || null,
+    avatarUrl: avatarUrl(u),
+    role: isUserAdmin(u) ? 'ADM' : 'USER',
+  };
+}
+
 /* Verificações automáticas de missão */
 const checks = {
   login: async () => true,
@@ -307,17 +408,13 @@ app.use(
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrcAttr: ["'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        imgSrc: [
-          "'self'",
-          'data:',
-          'blob:',
-          'https://cdn.discordapp.com',
-          'https://lh3.googleusercontent.com',
-          'https://*.supabase.co',
-        ],
-        connectSrc: ["'self'", 'https://*.supabase.co'],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+        connectSrc: PROD
+          ? ["'self'", 'https://*.supabase.co']
+          : ["'self'", 'https://*.supabase.co', 'ws:', 'wss:'],
         upgradeInsecureRequests: PROD ? [] : null,
       },
     },
@@ -363,15 +460,24 @@ const strict = rateLimit({ ...limits, windowMs: 60_000, limit: 15, message: { er
 const requireAuth = (req, res, next) => (req.user ? next() : res.status(401).json({ error: 'nao_autenticado' }));
 const requireAdmin = (req, res, next) => (req.user?.isAdmin ? next() : res.status(403).json({ error: 'sem_permissao' }));
 
+const PUBLIC_API_PATHS = new Set([
+  '/me',
+  '/auth/me',
+  '/auth/login',
+  '/auth/register',
+  '/auth/logout',
+  '/communities/public',
+  '/messages',
+]);
 app.use('/api', (req, res, next) =>
-  req.path === '/me' || req.user ? next() : res.status(401).json({ error: 'nao_autenticado' })
+  PUBLIC_API_PATHS.has(req.path) || req.user ? next() : res.status(401).json({ error: 'nao_autenticado' })
 );
 
-/* ---------- Login com Discord (Portal Vulpora) ---------- */
+/* ---------- Login com Discord ---------- */
 app.get('/auth/discord', (req, res) => {
   const state = randomBytes(16).toString('hex');
   const redirectUri = `${getBaseUrl(req)}/auth/discord/callback`;
-  const returnTo = safeReturnPath(req.query.returnTo);
+  const returnTo = safeReturnPath(req.query.returnTo, '/#/portal/comunidades');
 
   res.cookie('oauth_state', state, { httpOnly: true, sameSite: 'lax', secure: PROD, maxAge: 10 * 60 * 1000 });
   res.cookie('oauth_return', returnTo, { httpOnly: true, sameSite: 'lax', secure: PROD, maxAge: 10 * 60 * 1000 });
@@ -391,12 +497,12 @@ app.get(
   run(async (req, res) => {
     const { code, state } = req.query;
     const saved = req.cookies.oauth_state;
-    const returnTo = safeReturnPath(req.cookies.oauth_return);
+    const returnTo = safeReturnPath(req.cookies.oauth_return, '/#/portal/comunidades');
     const loginCommunity = extractCommunityFromPath(returnTo);
     const redirectUri = `${getBaseUrl(req)}/auth/discord/callback`;
     res.clearCookie('oauth_state');
     res.clearCookie('oauth_return');
-    if (!code || !state || state !== saved) return res.redirect(`${returnTo}?erro=state`);
+    if (!code || !state || state !== saved) return res.redirect(oauthErrorRedirect('state'));
 
     try {
       const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
@@ -454,16 +560,16 @@ app.get(
       res.redirect(returnTo);
     } catch (e) {
       console.error('Erro no login do Discord:', e.message);
-      res.redirect(`${returnTo}?erro=discord`);
+      res.redirect(oauthErrorRedirect('discord'));
     }
   })
 );
 
-/* ---------- Login com Google (Portal Vulpora) ---------- */
+/* ---------- Login com Google ---------- */
 app.get('/auth/google', (req, res) => {
-  const returnTo = safeReturnPath(req.query.returnTo);
+  const returnTo = safeReturnPath(req.query.returnTo, '/#/portal/comunidades');
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
-    return res.redirect(`${returnTo}?erro=google_config`);
+    return res.redirect(oauthErrorRedirect('google_config'));
   }
   const state = randomBytes(16).toString('hex');
   const redirectUri = `${getBaseUrl(req)}/auth/google/callback`;
@@ -486,12 +592,12 @@ app.get(
   run(async (req, res) => {
     const { code, state } = req.query;
     const saved = req.cookies.oauth_state;
-    const returnTo = safeReturnPath(req.cookies.oauth_return);
+    const returnTo = safeReturnPath(req.cookies.oauth_return, '/#/portal/comunidades');
     const loginCommunity = extractCommunityFromPath(returnTo);
     const redirectUri = `${getBaseUrl(req)}/auth/google/callback`;
     res.clearCookie('oauth_state');
     res.clearCookie('oauth_return');
-    if (!code || !state || state !== saved) return res.redirect(`${returnTo}?erro=state`);
+    if (!code || !state || state !== saved) return res.redirect(oauthErrorRedirect('state'));
 
     try {
       const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -564,104 +670,235 @@ app.get(
       res.redirect(returnTo);
     } catch (e) {
       console.error('Erro no login do Google:', e.message);
-      res.redirect(`${returnTo}?erro=google`);
+      res.redirect(oauthErrorRedirect('google'));
     }
   })
 );
 
-/* ---------- Cadastro e Login com E-mail/Usuário e Senha ---------- */
-app.post(
-  '/auth/register',
-  strict,
+/* ---------- Cadastro, Login e Logout (suporta /auth/* e /api/auth/*) ---------- */
+const handleRegister = run(async (req, res) => {
+  const name = String(req.body?.name ?? '').trim().slice(0, 40);
+  const email = String(req.body?.email ?? '').trim().toLowerCase();
+  const password = String(req.body?.password ?? '');
+  const loginCommunity = getReqCommunity(req);
+
+  if (name.length < 2) {
+    return res.status(400).json({ error: 'nome_invalido', message: 'Informe um nome com pelo menos 2 caracteres.' });
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'email_invalido', message: 'Informe um e-mail válido.' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'senha_curta', message: 'A senha precisa ter pelo menos 6 caracteres.' });
+  }
+
+  const { data: exists } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
+  if (exists) {
+    return res.status(409).json({ error: 'email_em_uso', message: 'Este e-mail já está cadastrado. Faça login.' });
+  }
+
+  const { data: created, error } = await supabase
+    .from('users')
+    .insert({
+      email,
+      username: name,
+      password_hash: hashPassword(password),
+      community: loginCommunity,
+    })
+    .select('id, username, email, avatar, discord_id')
+    .single();
+  if (error) throw error;
+
+  await createSession(res, created.id);
+  res.status(201).json({ ok: true, user: formatPortalUser(created) });
+});
+
+const handleLogin = run(async (req, res) => {
+  const loginInput = String(req.body?.login ?? req.body?.email ?? '').trim();
+  const password = String(req.body?.password ?? '');
+
+  if (!loginInput || !password) {
+    return res.status(400).json({ error: 'dados_incompletos', message: 'Preencha e-mail/usuário e senha.' });
+  }
+
+  const query = supabase
+    .from('users')
+    .select('id, username, email, avatar, password_hash, google_id, discord_id');
+  const { data: user } = loginInput.includes('@')
+    ? await query.eq('email', loginInput.toLowerCase()).maybeSingle()
+    : await query.ilike('username', loginInput).limit(1).maybeSingle();
+
+  if (!user) {
+    return res.status(401).json({ error: 'credenciais_invalidas', message: 'Usuário/e-mail ou senha incorretos.' });
+  }
+  if (!user.password_hash) {
+    const metodo = user.google_id ? 'Google' : 'Discord';
+    return res.status(400).json({
+      error: 'usar_oauth',
+      message: `Esta conta foi criada com ${metodo}. Continue usando o ícone do ${metodo}.`,
+    });
+  }
+  if (!verifyPassword(password, user.password_hash)) {
+    return res.status(401).json({ error: 'credenciais_invalidas', message: 'Usuário/e-mail ou senha incorretos.' });
+  }
+
+  await createSession(res, user.id);
+  res.json({ ok: true, user: formatPortalUser(user) });
+});
+
+const handleLogout = run(async (req, res) => {
+  if (req.cookies.sid) await supabase.from('sessions').delete().eq('id', req.cookies.sid);
+  res.clearCookie('sid');
+  res.json({ ok: true });
+});
+
+app.post(['/auth/register', '/api/auth/register'], strict, handleRegister);
+app.post(['/auth/login', '/api/auth/login'], strict, handleLogin);
+app.post(['/auth/logout', '/api/auth/logout'], handleLogout);
+
+/* ---------- Endpoints usados pelo app.js (Portal Vulpora) ---------- */
+app.get('/api/auth/me', (req, res) => {
+  res.json({ user: formatPortalUser(req.user) });
+});
+
+app.get(
+  '/api/communities/public',
   run(async (req, res) => {
-    const name = String(req.body?.name ?? '').trim().slice(0, 40);
-    const email = String(req.body?.email ?? '').trim().toLowerCase();
-    const password = String(req.body?.password ?? '');
-    const loginCommunity = getReqCommunity(req);
+    const all = await fetchAllCommunities();
+    let dbMemberships = new Map();
 
-    if (name.length < 2) {
-      return res.status(400).json({ error: 'nome_invalido', message: 'Informe um nome com pelo menos 2 caracteres.' });
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ error: 'email_invalido', message: 'Informe um e-mail válido.' });
-    }
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'senha_curta', message: 'A senha precisa ter pelo menos 6 caracteres.' });
+    if (req.user) {
+      const { data: mRows } = await supabase
+        .from('community_memberships')
+        .select('community_slug, status')
+        .eq('user_id', req.user.id);
+      (mRows || []).forEach((m) => dbMemberships.set(m.community_slug, m.status));
     }
 
-    const { data: exists } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
-    if (exists) {
-      return res.status(409).json({ error: 'email_em_uso', message: 'Este e-mail já está cadastrado. Faça login.' });
+    const list = Object.values(all).map((c) => {
+      const key = req.user ? `${req.user.id}:${c.slug}` : null;
+      const membershipStatus = req.user
+        ? dbMemberships.get(c.slug) || memoryMemberships.get(key) || 'active'
+        : null;
+
+      return {
+        id: c.slug,
+        name: c.name,
+        description: c.description || c.subtitle,
+        owner: c.owner || 'VULPORA',
+        status: c.status || 'ativa',
+        visibility: c.visibility || 'publica',
+        entry: c.entry || 'livre',
+        members: c.members ?? 0,
+        membershipStatus,
+        theme: c.visualTheme,
+        modules: ['Mensagem de boas-vindas', 'Próximos eventos', 'Mural da comunidade'],
+        team: [{ name: c.owner || 'VULPORA', role: 'Proprietário' }],
+        events: (c.events || []).map((ev) => ({
+          id: ev.id,
+          communityId: c.slug,
+          name: ev.title,
+          description: ev.description,
+          status: ev.status === 'live' ? 'publicado' : 'rascunho',
+          type: 'temporario',
+          date: ev.isoDate || '2026-12-01T00:00',
+          symbol: ev.status === 'live' ? '❄️' : '✨',
+          games: ['Jogo da memória', 'Quiz de alternativas'],
+          prizes: [],
+        })),
+      };
+    });
+    res.json(list);
+  })
+);
+
+app.post(
+  '/api/communities/request',
+  requireAuth,
+  run(async (req, res) => {
+    const slug = normalizeSlug(req.body?.communityId);
+    const all = await fetchAllCommunities();
+    if (!all[slug]) {
+      return res.status(404).json({ error: 'Comunidade não encontrada.' });
+    }
+    memoryMemberships.set(`${req.user.id}:${slug}`, 'pending');
+    await supabase
+      .from('community_memberships')
+      .upsert(
+        { user_id: req.user.id, community_slug: slug, status: 'pending' },
+        { onConflict: 'user_id,community_slug' }
+      );
+    res.status(201).json({ ok: true, status: 'pending' });
+  })
+);
+
+// Criação de novas comunidades no banco herdando o mesmo design e recebendo cores próprias
+app.post(
+  '/api/admin/communities',
+  requireAuth,
+  requireAdmin,
+  run(async (req, res) => {
+    const name = String(req.body?.name ?? '').trim().slice(0, 60);
+    const slug = normalizeSlug(req.body?.slug || name);
+    const description = String(req.body?.description ?? '').trim().slice(0, 240);
+
+    if (!name || slug.length < 2) {
+      return res.status(400).json({ error: 'dados_invalidos', message: 'Informe o nome da comunidade.' });
     }
 
-    const { data: created, error } = await supabase
-      .from('users')
-      .insert({
-        email,
-        username: name,
-        password_hash: hashPassword(password),
-        community: loginCommunity,
-      })
-      .select('id')
+    const payload = {
+      slug,
+      tag: slug.toUpperCase(),
+      name,
+      description: description || `Comunidade oficial ${name}`,
+      primary_color: String(req.body?.primary || '#140b2b'),
+      secondary_color: String(req.body?.secondary || '#12283d'),
+      accent_color: String(req.body?.accent || '#f3cf8a'),
+      symbol: String(req.body?.symbol || '✦').slice(0, 4),
+      hero_title: String(req.body?.hero || `Bem-vindo à ${name}`).slice(0, 100),
+      hero_subtitle: String(req.body?.subtitle || 'Eventos, missões e conquistas exclusivas.').slice(0, 180),
+      cover_url: String(req.body?.cover || ''),
+    };
+
+    const { data, error } = await supabase
+      .from('communities')
+      .upsert(payload, { onConflict: 'slug' })
+      .select('*')
       .single();
     if (error) throw error;
 
-    await createSession(res, created.id);
-    res.status(201).json({ ok: true });
+    res.status(201).json({ ok: true, community: mapCommunityRow(data) });
   })
 );
 
-app.post(
-  '/auth/login',
-  strict,
-  run(async (req, res) => {
-    const loginInput = String(req.body?.login ?? req.body?.email ?? '').trim();
-    const password = String(req.body?.password ?? '');
-
-    if (!loginInput || !password) {
-      return res.status(400).json({ error: 'dados_incompletos', message: 'Preencha e-mail/usuário e senha.' });
-    }
-
-    const query = supabase.from('users').select('id, password_hash, google_id, discord_id');
-    const { data: user } = loginInput.includes('@')
-      ? await query.eq('email', loginInput.toLowerCase()).maybeSingle()
-      : await query.ilike('username', loginInput).limit(1).maybeSingle();
-
-    if (!user) {
-      return res.status(401).json({ error: 'credenciais_invalidas', message: 'Usuário/e-mail ou senha incorretos.' });
-    }
-    if (!user.password_hash) {
-      const metodo = user.google_id ? 'Google' : 'Discord';
-      return res.status(400).json({
-        error: 'usar_oauth',
-        message: `Esta conta foi criada com ${metodo}. Continue usando o ícone do ${metodo}.`,
-      });
-    }
-    if (!verifyPassword(password, user.password_hash)) {
-      return res.status(401).json({ error: 'credenciais_invalidas', message: 'Usuário/e-mail ou senha incorretos.' });
-    }
-
-    await createSession(res, user.id);
-    res.json({ ok: true });
-  })
-);
-
-app.post(
-  '/auth/logout',
-  run(async (req, res) => {
-    if (req.cookies.sid) await supabase.from('sessions').delete().eq('id', req.cookies.sid);
-    res.clearCookie('sid');
-    res.json({ ok: true });
-  })
-);
+app.post('/api/messages', strict, (req, res) => {
+  const name = String(req.body?.name ?? '').trim().slice(0, 80);
+  const subject = String(req.body?.subject ?? 'Outros').trim().slice(0, 80);
+  const message = String(req.body?.message ?? '').trim().slice(0, 1200);
+  if (!name || message.length < 3) {
+    return res.status(400).json({ error: 'Preencha seu nome e uma mensagem válida.' });
+  }
+  memoryMessages.unshift({
+    id: randomBytes(6).toString('hex'),
+    userId: req.user?.id || null,
+    name,
+    subject,
+    message,
+    createdAt: new Date().toISOString(),
+  });
+  res.status(201).json({ ok: true });
+});
 
 /* ---------- Perfil e Dados da Comunidade ---------- */
 app.get(
   '/api/me',
   run(async (req, res) => {
     const comm = getReqCommunity(req);
-    const meta = getCommunityMeta(comm);
-    const communities = Object.values(COMMUNITIES);
+    const [meta, allMap] = await Promise.all([
+      getCommunityMeta(comm),
+      fetchAllCommunities(),
+    ]);
+    const communities = Object.values(allMap);
 
     if (!req.user) {
       return res.json({ user: null, community: meta, communities });
@@ -704,7 +941,7 @@ app.get(
   run(async (req, res) => {
     const ev = eventState();
     const community = getReqCommunity(req);
-    const meta = getCommunityMeta(community);
+    const meta = await getCommunityMeta(community);
 
     const subs = new Map();
     const [doneDays, { data: subRows }] = await Promise.all([
@@ -814,59 +1051,14 @@ app.post(
     });
   })
 );
-// GET /api/communities/:slug/ranking (ou /api/ranking)
-app.get('/api/communities/:slug/ranking', requireAuth, async (req, res) => {
-  const { slug } = req.params;
 
-  // Busca todos os participantes da comunidade ordenados por pontos no Supabase
-  const members = await prisma.member.findMany({
-    where: { communitySlug: slug },
-    include: { user: { select: { id: true, name: true, avatar: true } } },
-    orderBy: [
-      { points: 'desc' },
-      { updatedAt: 'asc' }, // desempate por quem chegou primeiro
-    ],
-  });
-
-  const ranking = members.map((m, idx) => ({
-    position: idx + 1,
-    id: m.user.id,
-    name: m.user.name,
-    avatar: m.user.avatar,
-    points: m.points,
-  }));
-
-  const myIndex = ranking.findIndex((r) => r.id === req.user.id);
-
-  res.json({
-    ranking,
-    me: myIndex >= 0
-      ? { position: ranking[myIndex].position, points: ranking[myIndex].points }
-      : { position: null, points: 0 },
-  });
-});
-app.get('/api/communities/:slug/me', requireAuth, async (req, res) => {
-  const { slug } = req.params;
-
-  const member = await prisma.member.findUnique({
-    where: {
-      userId_communitySlug: { userId: req.user.id, communitySlug: slug },
-    },
-  });
-
-  res.json({
-    user: req.user,
-    points: member?.points ?? 0,
-    missionsDone: member?.missionsDone ?? 0,
-  });
-});
 /* ---------- Ranking e Prêmios da Comunidade ---------- */
 app.get(
   '/api/ranking',
   requireAuth,
   run(async (req, res) => {
     const community = getReqCommunity(req);
-    const meta = getCommunityMeta(community);
+    const meta = await getCommunityMeta(community);
 
     const { data: rows } = await supabase
       .from('completions')
@@ -1169,33 +1361,49 @@ app.delete(
   })
 );
 
-/* ---------- Site, rotas SPA (Portal -> Comunidade -> Evento) e start ---------- */
+/* ---------- Site e Rotas SPA ---------- */
 app.get('/healthz', (req, res) => res.json({ ok: true }));
 app.use('/api', (req, res) => res.status(404).json({ error: 'rota_inexistente' }));
-app.use(express.static(path.join(__dirname, 'public')));
 
+if (existsSync(PUBLIC_DIR)) {
+  app.use(express.static(PUBLIC_DIR, { index: false }));
+}
+app.use(express.static(CLIENT_PUBLIC_DIR, { index: false }));
+if (existsSync(CLIENT_DIST_DIR)) {
+  app.use(express.static(CLIENT_DIST_DIR, { index: false }));
+}
+
+// Normaliza slug legado 'ducks' -> 'heaven'
 app.get(/^\/comunidade\/ducks(\/.*)?$/i, (req, res) => {
-  res.redirect(req.path.replace(/^\/comunidade\/ducks/i, '/comunidade/heaven'));
+  res.redirect(302, req.path.replace(/^\/comunidade\/ducks/i, '/comunidade/heaven'));
 });
 
-app.get('/comunidade/:slug', (req, res, next) => {
-  const normalized = normalizeSlug(req.params.slug);
-  if (req.params.slug !== normalized) {
-    return res.redirect(`/comunidade/${normalized}`);
-  }
-  next();
+// 1) Evento de Natal -> entrega o React compilado (EventLayout.jsx)
+app.get(/^\/comunidade\/[^/]+\/natal(\/.*)?$/i, (req, res) => {
+  const builtEventHtml = path.join(PUBLIC_DIR, 'index.html');
+  const devEventHtml = path.join(CLIENT_DIR, 'index.html');
+  if (existsSync(builtEventHtml)) return res.sendFile(builtEventHtml);
+  if (existsSync(devEventHtml)) return res.sendFile(devEventHtml);
+  res.status(404).send('<h1>Build do evento não encontrado.</h1>');
 });
 
-app.get(
-  ['/', '/comunidade', '/comunidade/', '/comunidade/:slug', /^\/comunidade\/[^/]+\/natal(\/.*)?$/i],
-  (req, res) => {
-    const indexFile = path.join(__dirname, 'public', 'index.html');
-    if (existsSync(indexFile)) {
-      return res.sendFile(indexFile);
-    }
-    res.type('html').send('<h1>Servidor no ar, mas falta o build em public/index.html</h1>');
-  }
-);
+// 2) Qualquer outra rota acessada sem # é convertida para /#/... no Portal Vulpora
+app.get(/^\/(login|cadastro|comunidades|perfil|portal(\/.*)?|comunidade(\/.*)?)$/i, (req, res) => {
+  const target = req.path
+    .replace(/^\/comunidades\/?$/i, '/portal/comunidades')
+    .replace(/^\/comunidade\/([^/]+)\/?$/i, '/comunidade/$1/eventos');
+
+  res.redirect(302, `/#${target}`);
+});
+
+// 3) Portal Vulpora -> entrega vulpora.html (app.js + global.css)
+app.get('*', (req, res) => {
+  const builtPortalHtml = path.join(PUBLIC_DIR, 'vulpora.html');
+  const devPortalHtml = path.join(CLIENT_PUBLIC_DIR, 'vulpora.html');
+  if (existsSync(builtPortalHtml)) return res.sendFile(builtPortalHtml);
+  if (existsSync(devPortalHtml)) return res.sendFile(devPortalHtml);
+  res.status(404).send('<h1>Portal Vulpora (vulpora.html) não encontrado.</h1>');
+});
 
 app.use((err, req, res, next) => {
   console.error(err);
@@ -1208,11 +1416,12 @@ if (!VERCEL) {
     const ev = eventState();
     console.log(
       `\nPortal Vulpora no ar!\n` +
-      `• Portal:             http://localhost:${PORT}/comunidade\n` +
-      `• Comunidade Kingdom: http://localhost:${PORT}/comunidade/thekingdom\n` +
-      `• Comunidade Heaven:  http://localhost:${PORT}/comunidade/heaven\n` +
-      `• Evento Kingdom:     http://localhost:${PORT}/comunidade/thekingdom/natal\n` +
-      `• Evento Heaven:      http://localhost:${PORT}/comunidade/heaven/natal\n` +
+      `• Início (Portal):    http://localhost:${PORT}/#/\n` +
+      `• Login:              http://localhost:${PORT}/#/login\n` +
+      `• Seleção Comunidade: http://localhost:${PORT}/#/portal/comunidades\n` +
+      `• The Kingdom:        http://localhost:${PORT}/#/comunidade/thekingdom/eventos\n` +
+      `• Heaven:             http://localhost:${PORT}/#/comunidade/heaven/eventos\n` +
+      `• Evento Natal:       http://localhost:${PORT}/comunidade/thekingdom/natal\n` +
       `(Evento Natal Mágico: ${ev.status}, dia ${ev.today})\n`
     );
   });
