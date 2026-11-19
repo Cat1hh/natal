@@ -263,6 +263,7 @@ export function Burst() {
     </div>
   );
 }
+
 export function MagicCursor() {
   const ref = useRef();
 
