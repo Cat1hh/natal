@@ -19,7 +19,35 @@ import {
   GalleryInspectModal,
 } from '../community/GalleryViews.jsx';
 
-function Side({ rk, pz, done, showPrizes }) {
+const RANK_OPEN_MS = new Date('2026-12-25T00:00:00-03:00').getTime();
+
+class ViewErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <section className="glass hot pad">
+          <h3>Não foi possível carregar esta aba</h3>
+          <p className="m">{this.state.error?.message || 'Erro inesperado ao renderizar.'}</p>
+          <a href="#inicio" className="btn" style={{ marginTop: 12, display: 'inline-flex' }}>
+            Voltar ao início do evento
+          </a>
+        </section>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function Side({ rk, pz, done, showPrizes, isRankOpen, isHeaven }) {
   const [t, setT] = useState('rk');
   return (
     <div className="glass hot">
@@ -27,7 +55,7 @@ function Side({ rk, pz, done, showPrizes }) {
         <div className="seg">
           <button className={t === 'rk' ? 'on' : ''} onClick={() => setT('rk')}>
             <Icon name="trophy" size={15} />
-            <span>Ranking</span>
+            <span>Rank</span>
           </button>
           <button className={t === 'pr' ? 'on' : ''} onClick={() => setT('pr')}>
             <Icon name="gift" size={15} />
@@ -37,10 +65,14 @@ function Side({ rk, pz, done, showPrizes }) {
       ) : (
         <h3 className="ico-title" style={{ marginTop: 0, marginBottom: 10 }}>
           <Icon name="trophy" size={20} />
-          <span>Ranking do Evento</span>
+          <span>{isRankOpen ? 'Rank Provisório' : 'Créditos & Rank'}</span>
         </h3>
       )}
-      {t === 'rk' || !showPrizes ? <Ranking rk={rk} /> : <Prizes pz={pz} done={done} />}
+      {t === 'rk' || !showPrizes ? (
+        <Ranking rk={rk} unlocked={isRankOpen} isHeaven={isHeaven} compact />
+      ) : (
+        <Prizes pz={pz} done={done} />
+      )}
     </div>
   );
 }
@@ -69,15 +101,18 @@ export function EventLayout({
   onReviewArt,
   onOpenLetter,
 }) {
-  const now = new Date();
-  const isFinale = Boolean(ev?.finale || (now.getMonth() === 11 && now.getDate() >= 26));
-  const canSeePrizes = isAdmin || isFinale;
+  const now = Date.now();
+  const isRankOpen = Boolean(ev?.finale || isAdmin || now >= RANK_OPEN_MS);
+  const canSeePrizes = Boolean(isAdmin || isRankOpen);
   const missionsDone = me?.missionsDone ?? 0;
 
-  const rawSlug = (communitySlug || 'thekingdom').toLowerCase();
-  const safeSlug = rawSlug === 'ducks' ? 'heaven' : rawSlug;
+  const safeLetters = Array.isArray(letters) ? letters : [];
+  const safeGallery = Array.isArray(gallery) ? gallery : [];
 
-  // Sai do React do Evento e volta direto para o Portal Vulpora (vulpora.html) na rota #
+  const rawSlug = (communitySlug || 'thekingdom').toLowerCase();
+  const safeSlug = rawSlug === 'ducks' || rawSlug === 'heavem' ? 'heaven' : rawSlug;
+  const isHeaven = safeSlug === 'heaven' || String(commName || '').toLowerCase().includes('heaven');
+
   const goToPortal = (hashRoute) => {
     const cleanHash = hashRoute.startsWith('/') ? hashRoute : `/${hashRoute}`;
     const alreadyAtRoot = window.location.pathname === '/';
@@ -88,11 +123,11 @@ export function EventLayout({
   };
 
   const tabs = [
-    ['inicio', 'home', 'Início do Evento'],
-    ['arvore', 'tree', 'Árvore de Natal'],
-    ['calendario', 'calendar', 'Calendário'],
-    ['ranking', 'trophy', 'Ranking'],
+    ['inicio', 'home', 'Início'],
+    ['calendario', 'calendar', 'Calendário do Advento'],
+    ['arvore', 'tree', 'Árvore'],
     ['galeria', 'gallery', 'Galeria'],
+    ['ranking', 'trophy', 'Rank'],
     ['regras', 'rules', 'Regras'],
     ['suporte', 'support', 'Suporte'],
     ...(canSeePrizes ? [['premios', 'gift', 'Premiações']] : []),
@@ -101,13 +136,15 @@ export function EventLayout({
 
   const openMission = (m) => setModal({ t: 'mission', day: m.day });
   const activeTab = tabs.find(([id]) => id === route) ? route : 'inicio';
-  const currentTabLabel = tabs.find(([id]) => id === activeTab)?.[2] || 'Início do Evento';
+  const currentTabLabel = tabs.find(([id]) => id === activeTab)?.[2] || 'Início';
 
   const view = !ev ? (
     <p className="m center pad">Carregando evento…</p>
   ) : activeTab === 'arvore' ? (
     <TreePage
-      letters={letters}
+      me={me}
+      ev={ev}
+      letters={safeLetters}
       communityMeta={activeMeta}
       onOpen={onOpenLetter}
       onWrite={() => setModal({ t: 'write' })}
@@ -116,7 +153,7 @@ export function EventLayout({
     <Calendar ev={ev} communityMeta={activeMeta} onMission={openMission} />
   ) : activeTab === 'galeria' ? (
     <GalleryPage
-      items={gallery}
+      items={safeGallery}
       me={me}
       communityMeta={activeMeta}
       isAdmin={isAdmin}
@@ -130,13 +167,13 @@ export function EventLayout({
     <SupportPage />
   ) : activeTab === 'ranking' ? (
     <section className="glass hot">
-      <p className="eyebrow">{commTag} · CLASSIFICAÇÃO DO EVENTO</p>
-      <h2>Ranking · Natal Mágico</h2>
-      <Ranking rk={rk || { ranking: [] }} />
+      <p className="eyebrow">{commTag} · {isRankOpen ? 'CLASSIFICAÇÃO PROVISÓRIA' : 'CRÉDITOS DO EVENTO'}</p>
+      <h2>{isRankOpen ? 'Rank · Natal 2026' : 'Créditos & Rank · Natal 2026'}</h2>
+      <Ranking rk={rk || { ranking: [] }} unlocked={isRankOpen} isHeaven={isHeaven} />
     </section>
   ) : activeTab === 'premios' && canSeePrizes ? (
     <section className="glass hot">
-      <h2>Premiações</h2>
+      <h2>Premiações · {commName}</h2>
       <Prizes pz={pz} done={missionsDone} />
     </section>
   ) : activeTab === 'perfil' ? (
@@ -146,7 +183,7 @@ export function EventLayout({
       me={me}
       ev={ev}
       communityMeta={activeMeta}
-      letters={letters}
+      letters={safeLetters}
       onOpen={onOpenLetter}
       onWrite={() => setModal({ t: 'write' })}
       onMission={openMission}
@@ -155,12 +192,20 @@ export function EventLayout({
   );
 
   const activeMission = modal?.t === 'mission'
-    ? ev?.missions?.find((x) => x.day === modal.day) ?? ev?.missions?.[modal.day - 1]
+    ? ev?.missions?.find((x) => x.day === modal.day) ?? ev?.missions?.[modal.day - 1] ?? { day: modal.day }
     : null;
 
   const body =
     !modal ? null :
-    modal.t === 'mission' ? <MissionModal key={modal.day} m={activeMission} onSubmit={onCompleteMission} /> :
+    modal.t === 'mission' ? (
+      <MissionModal
+        key={modal.day}
+        m={activeMission}
+        communityMeta={activeMeta}
+        isHeaven={isHeaven}
+        onSubmit={onCompleteMission}
+      />
+    ) :
     modal.t === 'write' ? <WriteModal authorName={me?.user?.name} onSend={onWriteLetter} /> :
     modal.t === 'gallery-new' ? <GalleryModal onSubmit={onSubmitArt} /> :
     modal.t === 'gallery-view' ? <GalleryInspectModal art={modal.art} /> :
@@ -182,12 +227,12 @@ export function EventLayout({
                 <Icon name="sparkles" size={18} />
               </span>
               <div>
-                <div className="brand">Natal Mágico</div>
-                <small>EVENTO · {commTag}</small>
+                <div className="brand">Advento 2026</div>
+                <small>NATAL · {commTag}</small>
               </div>
             </a>
 
-            <p className="side-label">EVENTO DE NATAL</p>
+            <p className="side-label">NATAL 2026</p>
             <nav className="side-nav">
               {tabs.map(([id, icon, name]) => (
                 <a key={id} href={`#${id}`} className={activeTab === id ? 'on' : ''}>
@@ -203,7 +248,7 @@ export function EventLayout({
           <div className="side-foot">
             <div className="side-progress">
               <div className="side-prog-top">
-                <span>Progresso Natal</span>
+                <span>Progresso Advento</span>
                 <b>{missionsDone}/25</b>
               </div>
               <div className="bar mini">
@@ -259,10 +304,21 @@ export function EventLayout({
           </header>
 
           <div className={showRightWidget ? 'layout' : ''}>
-            <main>{view}</main>
+            <main>
+              <ViewErrorBoundary key={activeTab}>
+                {view}
+              </ViewErrorBoundary>
+            </main>
             {showRightWidget && (
               <aside className="side">
-                <Side rk={rk} pz={pz} done={missionsDone} showPrizes={canSeePrizes} />
+                <Side
+                  rk={rk}
+                  pz={pz}
+                  done={missionsDone}
+                  showPrizes={canSeePrizes}
+                  isRankOpen={isRankOpen}
+                  isHeaven={isHeaven}
+                />
               </aside>
             )}
           </div>

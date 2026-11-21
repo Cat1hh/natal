@@ -15,6 +15,12 @@ const SPOTS = [
   [216, 250],
 ];
 
+const REGION_COORDS = {
+  esquerda: { x: 24, y: 214, w: 48, h: 64 },
+  base: { x: 126, y: 274, w: 48, h: 58 },
+  direita: { x: 228, y: 214, w: 48, h: 64 },
+};
+
 const LIGHTS = [
   [112, 113], [131, 119], [150, 121], [169, 119], [188, 113],
   [90, 167], [120, 175], [150, 178], [180, 175], [210, 167],
@@ -41,12 +47,35 @@ const TIERS = [
   'M 150 44 C 136 70, 120 94, 104 113 Q 127 121, 150 113 Q 173 121, 196 113 C 180 94, 164 70, 150 44 Z',
 ];
 
-export function Tree({ letters = [], onOpen }) {
+export function Tree({ letters = [], ornaments = [], isHeaven = false, onOpen }) {
   const ballGrads = ['url(#bR)', 'url(#bG)', 'url(#bC)'];
   const lightColors = ['#F4A51D', '#A81E23', '#F1E4D4'];
 
+  const approvedSprites = useMemo(() => {
+    const pool = [
+      ...(Array.isArray(ornaments) ? ornaments : []),
+      ...(Array.isArray(letters) ? letters.filter((item) => item?.imageUrl) : []),
+    ];
+    const byRegion = {};
+    for (const item of pool) {
+      const reg = String(item?.region || 'base').toLowerCase();
+      if (REGION_COORDS[reg] && item?.imageUrl && !byRegion[reg]) {
+        byRegion[reg] = item;
+      }
+    }
+    return Object.entries(byRegion);
+  }, [letters, ornaments]);
+
+  const plaqueTitle = isHeaven ? 'BOSQUE HEAVEN' : 'CASTELO KINGDOM';
+  const clueFragment = isHeaven ? 'ZE' : 'TRE';
+
   return (
-    <svg className="tree" viewBox="0 0 300 350" role="img" aria-label="Árvore de Natal com cartinhas">
+    <svg
+      className="tree"
+      viewBox="0 0 300 350"
+      role="img"
+      aria-label={`Árvore de Natal · ${plaqueTitle} · Placa Pista 02: ${clueFragment}`}
+    >
       <defs>
         {/* Folhagem Verde Pinheiro (#575C27) */}
         <linearGradient id="tg" x1="0" y1="0" x2="0" y2="1">
@@ -102,7 +131,22 @@ export function Tree({ letters = [], onOpen }) {
         </filter>
       </defs>
 
-      <ellipse cx="150" cy="334" rx="112" ry="14" fill="url(#snowBase)" />
+      {/* Silhueta sutil do cenário (Bosque da Heaven vs Castelo Kingdom) */}
+      {isHeaven ? (
+        <g opacity="0.14" fill="#F1E4D4" aria-hidden="true">
+          <path d="M 18 328 L 36 258 L 54 328 Z" />
+          <path d="M 244 328 L 264 252 L 284 328 Z" />
+          <circle cx="46" cy="64" r="1.5" />
+          <circle cx="256" cy="78" r="1.8" />
+        </g>
+      ) : (
+        <g opacity="0.14" fill="#F1E4D4" aria-hidden="true">
+          <path d="M 22 328 L 22 272 L 30 272 L 30 280 L 38 280 L 38 272 L 46 272 L 46 328 Z" />
+          <path d="M 254 328 L 254 268 L 262 268 L 262 276 L 270 276 L 270 268 L 278 268 L 278 328 Z" />
+        </g>
+      )}
+
+      <ellipse cx="150" cy="334" rx="118" ry="14" fill="url(#snowBase)" />
 
       {/* Brilho e raios da estrela */}
       <circle cx="150" cy="30" r="44" fill="url(#gl)" className="star" />
@@ -192,7 +236,29 @@ export function Tree({ letters = [], onOpen }) {
         <circle cx="150" cy="30" r="2.8" fill="#F1E4D4" />
       </g>
 
-      {/* Cartinhas penduradas */}
+      {/* Personagens PNG transparente aprovados nas regiões esquerda, base e direita */}
+      {approvedSprites.map(([reg, item]) => {
+        const box = REGION_COORDS[reg];
+        return (
+          <g
+            key={reg}
+            className={onOpen ? 'env' : 'env off'}
+            onClick={() => onOpen?.(item)}
+            style={{ cursor: onOpen ? 'pointer' : 'default' }}
+          >
+            <image
+              href={item.imageUrl}
+              x={box.x}
+              y={box.y}
+              width={box.w}
+              height={box.h}
+              preserveAspectRatio="xMidYMax meet"
+            />
+          </g>
+        );
+      })}
+
+      {/* Cartinhas e enfeites pendurados */}
       {letters.slice(0, 12).map((l, i) => (
         <g
           key={l.id ?? i}
@@ -200,7 +266,7 @@ export function Tree({ letters = [], onOpen }) {
           className={onOpen ? 'env' : 'env off'}
           role={onOpen ? 'button' : undefined}
           tabIndex={onOpen ? 0 : -1}
-          aria-label={onOpen ? `Ler cartinha de ${l.author}` : undefined}
+          aria-label={onOpen ? `Ler mensagem de ${l.author || 'Anônimo'}` : undefined}
           onClick={() => onOpen?.(l)}
           onKeyDown={(e) => e.key === 'Enter' && onOpen?.(l)}
         >
@@ -212,6 +278,44 @@ export function Tree({ letters = [], onOpen }) {
           </g>
         </g>
       ))}
+
+      {/* Placa da Árvore (Cenário + Fragmento 2/3 da Caça às pistas) */}
+      <g transform="translate(12, 294)">
+        <rect x="38" y="26" width="8" height="16" rx="2" fill="#593211" />
+        <rect
+          x="0"
+          y="0"
+          width="84"
+          height="28"
+          rx="4"
+          fill="#3c210b"
+          stroke="#F4A51D"
+          strokeOpacity="0.65"
+          strokeWidth="1"
+        />
+        <text
+          x="42"
+          y="11"
+          textAnchor="middle"
+          fill="#F1E4D4"
+          fontSize="6.4"
+          fontWeight="700"
+          letterSpacing="0.4"
+        >
+          {plaqueTitle}
+        </text>
+        <text
+          x="42"
+          y="21.5"
+          textAnchor="middle"
+          fill="#F4A51D"
+          fontSize="7.4"
+          fontWeight="800"
+          letterSpacing="0.8"
+        >
+          PISTA 02: {clueFragment}
+        </text>
+      </g>
     </svg>
   );
 }
