@@ -13,6 +13,17 @@ import * as missionsMod from './missions.js';
 const { MISSIONS, PRIZES, MILESTONES } = missionsMod;
 
 const DEFAULT_COMMUNITY = 'thekingdom';
+const PROD_DOMAIN = 'vulpora.com.br';
+
+const IS_WORKER = Boolean(globalThis.__CLOUDFLARE_WORKER__ || process.env.CF_PAGES);
+const IS_SERVERLESS = Boolean(process.env.VERCEL || IS_WORKER);
+
+const getEnv = (key, fallback = '') => {
+  const val = process.env[key];
+  return typeof val === 'string' && val.trim() !== '' ? val.trim() : fallback;
+};
+
+const isLocalHost = (host = '') => /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(String(host).trim());
 
 const FALLBACK_COMMUNITIES = {
   thekingdom: {
@@ -157,31 +168,11 @@ async function fetchAllCommunities() {
   return FALLBACK_COMMUNITIES;
 }
 
-const {
-  PORT = 3000,
-  VERCEL,
-  VERCEL_URL,
-  BASE_URL = VERCEL_URL ? `https://${VERCEL_URL}` : `http://localhost:${PORT}`,
-  NODE_ENV = VERCEL ? 'production' : 'development',
-  DISCORD_CLIENT_ID,
-  DISCORD_CLIENT_SECRET,
-  GOOGLE_CLIENT_ID,
-  GOOGLE_CLIENT_SECRET,
-  ADMIN_IDS = '',
-  ADMIN_EMAILS = '',
-  EVENT_START = '2026-12-01',
-  DEBUG_DAY,
-  TRUST_PROXY,
-} = process.env;
-
-const PROD = NODE_ENV === 'production' || Boolean(VERCEL);
-const ADMINS = new Set(ADMIN_IDS.split(',').map((s) => s.trim()).filter(Boolean));
-const ADMIN_EMAIL_SET = new Set(
-  ADMIN_EMAILS.split(',')
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean)
-);
+const PORT = Number(getEnv('PORT', '3000')) || 3000;
+const NODE_ENV = getEnv('NODE_ENV', IS_SERVERLESS ? 'production' : 'development');
+const PROD = NODE_ENV === 'production' || IS_SERVERLESS;
 const SESSION_MS = 30 * 24 * 3600 * 1000;
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const CLIENT_DIR = path.join(__dirname, 'client');
@@ -196,7 +187,8 @@ function normalizeSlug(raw) {
   const clean = String(raw || '')
     .toLowerCase()
     .replace(/[^a-z0-9_-]/g, '');
-  if (clean === 'ducks') return 'heaven';
+  if (clean === 'ducks' || clean === 'heavem') return 'heaven';
+  if (clean === 'the-kingdom' || clean === 'kingdom') return 'thekingdom';
   return clean || DEFAULT_COMMUNITY;
 }
 
@@ -239,13 +231,11 @@ async function getCommunityMeta(slug) {
 function safeReturnPath(raw, fallback = '/#/portal/comunidades') {
   const val = String(raw || '').trim();
   if (!val) return fallback;
-  if (val.startsWith('/') && !val.startsWith('//')) {
+  if (val.startsWith('/') && !/^\/[\/\\]/.test(val)) {
     const normalized = val.replace(/^(\/#)?\/comunidade\/ducks(?=\/|$)/i, '$1/comunidade/heaven');
-    // Rotas do evento (/natal) permanecem sem # para carregar o React do evento
     if (/^\/comunidade\/[^/]+\/natal(\/|$)/i.test(normalized)) {
       return normalized;
     }
-    // Rotas do portal usam sempre /#/...
     if (normalized !== '/' && !normalized.startsWith('/#')) {
       return `/#${normalized}`;
     }
@@ -255,14 +245,24 @@ function safeReturnPath(raw, fallback = '/#/portal/comunidades') {
 }
 
 function oauthErrorRedirect(code) {
-  return `/?erro=${encodeURIComponent(code)}#/login`;
+  const encoded = encodeURIComponent(code);
+  return `/?erro=${encoded}#/login?erro=${encoded}`;
 }
 
-const isUserAdmin = (u) =>
-  Boolean(
-    (u?.discord_id && ADMINS.has(u.discord_id)) ||
-    (u?.email && ADMIN_EMAIL_SET.has(u.email.toLowerCase()))
+function isUserAdmin(u) {
+  if (!u) return false;
+  const admins = new Set(getEnv('ADMIN_IDS').split(',').map((s) => s.trim()).filter(Boolean));
+  const adminEmails = new Set(
+    getEnv('ADMIN_EMAILS')
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean)
   );
+  return Boolean(
+    (u.discord_id && admins.has(String(u.discord_id))) ||
+    (u.email && adminEmails.has(String(u.email).toLowerCase()))
+  );
+}
 
 function hashPassword(password) {
   const salt = randomBytes(16).toString('hex');
@@ -282,29 +282,92 @@ function verifyPassword(password, stored) {
   }
 }
 
-async function createSession(res, userId) {
+function isSecureRequest(req) {
+  const host = req.get('host') || '';
+  if (isLocalHost(host)) return false;
+  return PROD && (req.secure || req.get('x-forwarded-proto') === 'https');
+}
+
+function cookieOptions(req, maxAge) {
+  return {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: isSecureRequest(req),
+    path: '/',
+    ...(maxAge ? { maxAge } : {}),
+  };
+}
+
+async function createSession(req, res, userId) {
   await supabase.from('sessions').delete().lt('expires_at', Date.now());
   const sid = randomBytes(32).toString('hex');
   const { error } = await supabase
     .from('sessions')
     .insert({ id: sid, user_id: userId, expires_at: Date.now() + SESSION_MS });
   if (error) throw error;
-  res.cookie('sid', sid, { httpOnly: true, sameSite: 'lax', secure: PROD, maxAge: SESSION_MS });
+  res.cookie('sid', sid, cookieOptions(req, SESSION_MS));
 }
 
 function getBaseUrl(req) {
-  if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/$/, '');
-  const host = req.get('host');
-  const proto = req.get('x-forwarded-proto') || req.protocol || 'http';
-  return host ? `${proto}://${host}` : BASE_URL.replace(/\/$/, '');
+  const host = (req.get('host') || '').replace(/^www\./i, '');
+  if (isLocalHost(host)) {
+    const proto = req.get('x-forwarded-proto') === 'https' ? 'https' : 'http';
+    return `${proto}://${host}`;
+  }
+  const envBase = getEnv('BASE_URL').replace(/\/$/, '');
+  if (envBase && (!PROD || !/localhost|127\.0\.0\.1/i.test(envBase))) {
+    return envBase;
+  }
+  if (host) {
+    const proto = PROD ? 'https' : req.get('x-forwarded-proto') || req.protocol || 'http';
+    return `${proto}://${host}`;
+  }
+  return PROD ? `https://${PROD_DOMAIN}` : `http://localhost:${PORT}`;
+}
+
+function getDiscordRedirectUri(req) {
+  const host = req.get('host') || '';
+  const suffix = req.path.startsWith('/api/') ? '/api/auth/discord/callback' : '/auth/discord/callback';
+  if (isLocalHost(host)) {
+    return `${getBaseUrl(req)}${suffix}`;
+  }
+  const envUri = getEnv('DISCORD_REDIRECT_URI');
+  if (envUri && (!PROD || !/localhost|127\.0\.0\.1/i.test(envUri))) {
+    return envUri;
+  }
+  return `${getBaseUrl(req)}${suffix}`;
+}
+
+function getGoogleRedirectUri(req) {
+  const host = req.get('host') || '';
+  const suffix = req.path.startsWith('/api/') ? '/api/auth/google/callback' : '/auth/google/callback';
+  if (isLocalHost(host)) {
+    return `${getBaseUrl(req)}${suffix}`;
+  }
+  const envUri = getEnv('GOOGLE_REDIRECT_URI');
+  if (envUri && (!PROD || !/localhost|127\.0\.0\.1/i.test(envUri))) {
+    return envUri;
+  }
+  return `${getBaseUrl(req)}${suffix}`;
+}
+
+async function insertUserSafe(payload, selectCols = 'id') {
+  let res = await supabase.from('users').insert(payload).select(selectCols).single();
+  if (res.error && /community/i.test(String(res.error.message || ''))) {
+    const { community, ...fallbackPayload } = payload;
+    res = await supabase.from('users').insert(fallbackPayload).select(selectCols).single();
+  }
+  if (res.error) throw res.error;
+  return res.data;
 }
 
 /* ---------- Dia do evento ---------- */
 function eventState() {
-  const dbg = parseInt(DEBUG_DAY, 10);
+  const eventStart = getEnv('EVENT_START', '2026-12-01');
+  const dbg = parseInt(getEnv('DEBUG_DAY'), 10);
   if (!PROD && dbg >= 1 && dbg <= 25) return { status: 'live', today: dbg, finale: false };
   const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
-  const diff = Math.round((Date.parse(hoje) - Date.parse(EVENT_START)) / 86400000);
+  const diff = Math.round((Date.parse(hoje) - Date.parse(eventStart)) / 86400000);
   if (diff < 0) return { status: 'before', today: 0, finale: false };
   if (diff >= 25) return { status: 'ended', today: 25, finale: true };
   return { status: 'live', today: diff + 1, finale: false };
@@ -357,10 +420,12 @@ const avatarUrl = (u) => {
 
 function formatPortalUser(u) {
   if (!u) return null;
+  const provider = u.discord_id ? 'discord' : u.google_id ? 'google' : 'email';
   return {
     id: u.id,
     name: u.username,
     email: u.email || null,
+    provider,
     avatarUrl: avatarUrl(u),
     role: isUserAdmin(u) ? 'ADM' : 'USER',
   };
@@ -400,7 +465,16 @@ const checkMsg = {
 
 /* ---------- App e segurança ---------- */
 const app = express();
-if (TRUST_PROXY || VERCEL) app.set('trust proxy', Number(TRUST_PROXY) || 1);
+const trustProxy = getEnv('TRUST_PROXY');
+if (trustProxy || IS_SERVERLESS) app.set('trust proxy', Number(trustProxy) || 1);
+
+app.use((req, res, next) => {
+  const host = req.get('host') || '';
+  if (/^www\./i.test(host)) {
+    return res.redirect(301, `https://${host.replace(/^www\./i, '')}${req.originalUrl}`);
+  }
+  next();
+});
 
 app.use(
   helmet({
@@ -415,7 +489,7 @@ app.use(
         connectSrc: PROD
           ? ["'self'", 'https://*.supabase.co']
           : ["'self'", 'https://*.supabase.co', 'ws:', 'wss:'],
-        upgradeInsecureRequests: PROD ? [] : null,
+        upgradeInsecureRequests: PROD && !IS_WORKER ? [] : null,
       },
     },
   })
@@ -429,13 +503,13 @@ app.use((req, res, next) => {
   if (!origin) return next();
   const currentOrigin = new URL(getBaseUrl(req)).origin;
   if (origin === currentOrigin) return next();
-  if (!PROD && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return next();
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) return next();
   return res.status(403).json({ error: 'origem_invalida' });
 });
 
 app.use(
   run(async (req, res, next) => {
-    const sid = req.cookies.sid;
+    const sid = req.cookies?.sid;
     if (!sid) {
       req.user = null;
       return next();
@@ -466,118 +540,171 @@ const PUBLIC_API_PATHS = new Set([
   '/auth/login',
   '/auth/register',
   '/auth/logout',
+  '/auth/discord',
+  '/auth/discord/callback',
+  '/auth/google',
+  '/auth/google/callback',
   '/communities/public',
   '/messages',
 ]);
-app.use('/api', (req, res, next) =>
-  PUBLIC_API_PATHS.has(req.path) || req.user ? next() : res.status(401).json({ error: 'nao_autenticado' })
-);
+app.use('/api', (req, res, next) => {
+  const isPublicLettersGet = req.method === 'GET' && req.path === '/letters';
+  if (PUBLIC_API_PATHS.has(req.path) || isPublicLettersGet || req.user) {
+    return next();
+  }
+  return res.status(401).json({ error: 'nao_autenticado' });
+});
 
-/* ---------- Login com Discord ---------- */
-app.get('/auth/discord', (req, res) => {
+/* ---------- Login com Discord (suporta /auth/* e /api/auth/*) ---------- */
+app.get(['/auth/discord', '/api/auth/discord'], (req, res) => {
+  const clientId = getEnv('DISCORD_CLIENT_ID');
+  const clientSecret = getEnv('DISCORD_CLIENT_SECRET');
+  if (!clientId || !clientSecret) {
+    console.error('[Discord OAuth] DISCORD_CLIENT_ID ou DISCORD_CLIENT_SECRET ausente');
+    return res.redirect(oauthErrorRedirect('discord_config'));
+  }
   const state = randomBytes(16).toString('hex');
-  const redirectUri = `${getBaseUrl(req)}/auth/discord/callback`;
+  const redirectUri = getDiscordRedirectUri(req);
   const returnTo = safeReturnPath(req.query.returnTo, '/#/portal/comunidades');
 
-  res.cookie('oauth_state', state, { httpOnly: true, sameSite: 'lax', secure: PROD, maxAge: 10 * 60 * 1000 });
-  res.cookie('oauth_return', returnTo, { httpOnly: true, sameSite: 'lax', secure: PROD, maxAge: 10 * 60 * 1000 });
+  res.cookie('oauth_state', state, cookieOptions(req, 10 * 60 * 1000));
+  res.cookie('oauth_return', returnTo, cookieOptions(req, 10 * 60 * 1000));
 
   const params = new URLSearchParams({
-    client_id: DISCORD_CLIENT_ID ?? '',
+    client_id: clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: 'identify',
+    scope: 'identify email',
     state,
   });
   res.redirect(`https://discord.com/oauth2/authorize?${params}`);
 });
 
 app.get(
-  '/auth/discord/callback',
+  ['/auth/discord/callback', '/api/auth/discord/callback'],
   run(async (req, res) => {
-    const { code, state } = req.query;
-    const saved = req.cookies.oauth_state;
-    const returnTo = safeReturnPath(req.cookies.oauth_return, '/#/portal/comunidades');
+    const clientId = getEnv('DISCORD_CLIENT_ID');
+    const clientSecret = getEnv('DISCORD_CLIENT_SECRET');
+    const { code, state, error: oauthErr, error_description: oauthDesc } = req.query;
+    const saved = req.cookies?.oauth_state;
+    const returnTo = safeReturnPath(req.cookies?.oauth_return, '/#/portal/comunidades');
     const loginCommunity = extractCommunityFromPath(returnTo);
-    const redirectUri = `${getBaseUrl(req)}/auth/discord/callback`;
-    res.clearCookie('oauth_state');
-    res.clearCookie('oauth_return');
-    if (!code || !state || state !== saved) return res.redirect(oauthErrorRedirect('state'));
+    const redirectUri = getDiscordRedirectUri(req);
+
+    res.clearCookie('oauth_state', { path: '/' });
+    res.clearCookie('oauth_return', { path: '/' });
+
+    if (!clientId || !clientSecret) {
+      console.error('[Discord OAuth] Credenciais ausentes no callback');
+      return res.redirect(oauthErrorRedirect('discord_config'));
+    }
+    if (oauthErr) {
+      console.error('[Discord OAuth] Recusado pelo Discord:', oauthErr, oauthDesc || '');
+      return res.redirect(oauthErrorRedirect('discord'));
+    }
+    if (!code || !state || state !== saved) {
+      console.error('[Discord OAuth] State inválido:', { hasCode: Boolean(code), state, saved });
+      return res.redirect(oauthErrorRedirect('state'));
+    }
 
     try {
       const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
-          client_id: DISCORD_CLIENT_ID,
-          client_secret: DISCORD_CLIENT_SECRET,
+          client_id: clientId,
+          client_secret: clientSecret,
           grant_type: 'authorization_code',
           code: String(code),
           redirect_uri: redirectUri,
         }),
       });
-      if (!tokenRes.ok) throw new Error(`token ${tokenRes.status}`);
+      if (!tokenRes.ok) {
+        const body = await tokenRes.text();
+        throw new Error(`token HTTP ${tokenRes.status} (redirect_uri="${redirectUri}"): ${body}`);
+      }
       const { access_token } = await tokenRes.json();
 
       const meRes = await fetch('https://discord.com/api/users/@me', {
         headers: { Authorization: `Bearer ${access_token}` },
       });
-      if (!meRes.ok) throw new Error(`users/@me ${meRes.status}`);
+      if (!meRes.ok) {
+        const body = await meRes.text();
+        throw new Error(`users/@me HTTP ${meRes.status}: ${body}`);
+      }
       const d = await meRes.json();
 
-      const { data: existing } = await supabase
+      const email = d.email ? String(d.email).trim().toLowerCase() : null;
+      const displayName = String(d.global_name || d.username || 'Viajante').trim().slice(0, 40);
+
+      let { data: existing, error: selErr } = await supabase
         .from('users')
-        .select('id')
-        .eq('discord_id', d.id)
+        .select('id, email')
+        .eq('discord_id', String(d.id))
         .maybeSingle();
+      if (selErr) throw selErr;
+
+      let emailAlreadyUsed = false;
+      if (!existing && email) {
+        const resByEmail = await supabase
+          .from('users')
+          .select('id, email')
+          .eq('email', email)
+          .maybeSingle();
+        if (resByEmail.error) throw resByEmail.error;
+        existing = resByEmail.data;
+        emailAlreadyUsed = Boolean(existing);
+      }
 
       let userId = existing?.id;
       if (userId) {
         const { error: uErr } = await supabase
           .from('users')
           .update({
-            username: d.global_name || d.username,
-            avatar: d.avatar,
+            discord_id: String(d.id),
+            username: displayName,
+            avatar: d.avatar || null,
           })
           .eq('id', userId);
         if (uErr) throw uErr;
       } else {
-        const { data: created, error: uErr } = await supabase
-          .from('users')
-          .insert({
-            discord_id: d.id,
-            username: d.global_name || d.username,
-            avatar: d.avatar,
+        const created = await insertUserSafe(
+          {
+            discord_id: String(d.id),
+            username: displayName,
+            avatar: d.avatar || null,
+            ...(email && !emailAlreadyUsed ? { email } : {}),
             community: loginCommunity,
-          })
-          .select('id')
-          .single();
-        if (uErr) throw uErr;
+          },
+          'id'
+        );
         userId = created.id;
       }
 
-      await createSession(res, userId);
+      await createSession(req, res, userId);
       res.redirect(returnTo);
     } catch (e) {
-      console.error('Erro no login do Discord:', e.message);
+      console.error('[Discord OAuth] Falha na autenticação:', e?.message || e, e);
       res.redirect(oauthErrorRedirect('discord'));
     }
   })
 );
 
-/* ---------- Login com Google ---------- */
-app.get('/auth/google', (req, res) => {
+/* ---------- Login com Google (suporta /auth/* e /api/auth/*) ---------- */
+app.get(['/auth/google', '/api/auth/google'], (req, res) => {
+  const clientId = getEnv('GOOGLE_CLIENT_ID');
+  const clientSecret = getEnv('GOOGLE_CLIENT_SECRET');
   const returnTo = safeReturnPath(req.query.returnTo, '/#/portal/comunidades');
-  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+  if (!clientId || !clientSecret) {
     return res.redirect(oauthErrorRedirect('google_config'));
   }
   const state = randomBytes(16).toString('hex');
-  const redirectUri = `${getBaseUrl(req)}/auth/google/callback`;
-  res.cookie('oauth_state', state, { httpOnly: true, sameSite: 'lax', secure: PROD, maxAge: 10 * 60 * 1000 });
-  res.cookie('oauth_return', returnTo, { httpOnly: true, sameSite: 'lax', secure: PROD, maxAge: 10 * 60 * 1000 });
+  const redirectUri = getGoogleRedirectUri(req);
+  res.cookie('oauth_state', state, cookieOptions(req, 10 * 60 * 1000));
+  res.cookie('oauth_return', returnTo, cookieOptions(req, 10 * 60 * 1000));
 
   const params = new URLSearchParams({
-    client_id: GOOGLE_CLIENT_ID,
+    client_id: clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
     scope: 'openid email profile',
@@ -588,15 +715,17 @@ app.get('/auth/google', (req, res) => {
 });
 
 app.get(
-  '/auth/google/callback',
+  ['/auth/google/callback', '/api/auth/google/callback'],
   run(async (req, res) => {
+    const clientId = getEnv('GOOGLE_CLIENT_ID');
+    const clientSecret = getEnv('GOOGLE_CLIENT_SECRET');
     const { code, state } = req.query;
-    const saved = req.cookies.oauth_state;
-    const returnTo = safeReturnPath(req.cookies.oauth_return, '/#/portal/comunidades');
+    const saved = req.cookies?.oauth_state;
+    const returnTo = safeReturnPath(req.cookies?.oauth_return, '/#/portal/comunidades');
     const loginCommunity = extractCommunityFromPath(returnTo);
-    const redirectUri = `${getBaseUrl(req)}/auth/google/callback`;
-    res.clearCookie('oauth_state');
-    res.clearCookie('oauth_return');
+    const redirectUri = getGoogleRedirectUri(req);
+    res.clearCookie('oauth_state', { path: '/' });
+    res.clearCookie('oauth_return', { path: '/' });
     if (!code || !state || state !== saved) return res.redirect(oauthErrorRedirect('state'));
 
     try {
@@ -604,20 +733,26 @@ app.get(
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
-          client_id: GOOGLE_CLIENT_ID,
-          client_secret: GOOGLE_CLIENT_SECRET,
+          client_id: clientId,
+          client_secret: clientSecret,
           grant_type: 'authorization_code',
           code: String(code),
           redirect_uri: redirectUri,
         }),
       });
-      if (!tokenRes.ok) throw new Error(`google token ${tokenRes.status}`);
+      if (!tokenRes.ok) {
+        const body = await tokenRes.text();
+        throw new Error(`google token HTTP ${tokenRes.status}: ${body}`);
+      }
       const { access_token } = await tokenRes.json();
 
       const infoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
         headers: { Authorization: `Bearer ${access_token}` },
       });
-      if (!infoRes.ok) throw new Error(`google userinfo ${infoRes.status}`);
+      if (!infoRes.ok) {
+        const body = await infoRes.text();
+        throw new Error(`google userinfo HTTP ${infoRes.status}: ${body}`);
+      }
       const g = await infoRes.json();
 
       const email = String(g.email || '').trim().toLowerCase();
@@ -651,25 +786,23 @@ app.get(
         if (error) throw error;
       } else {
         const displayName = String(g.name || email.split('@')[0]).trim().slice(0, 40);
-        const { data: created, error } = await supabase
-          .from('users')
-          .insert({
+        const created = await insertUserSafe(
+          {
             google_id: g.sub,
             email,
             username: displayName,
             avatar: g.picture || null,
             community: loginCommunity,
-          })
-          .select('id')
-          .single();
-        if (error) throw error;
+          },
+          'id'
+        );
         userId = created.id;
       }
 
-      await createSession(res, userId);
+      await createSession(req, res, userId);
       res.redirect(returnTo);
     } catch (e) {
-      console.error('Erro no login do Google:', e.message);
+      console.error('[Google OAuth] Falha na autenticação:', e?.message || e, e);
       res.redirect(oauthErrorRedirect('google'));
     }
   })
@@ -683,33 +816,47 @@ const handleRegister = run(async (req, res) => {
   const loginCommunity = getReqCommunity(req);
 
   if (name.length < 2) {
-    return res.status(400).json({ error: 'nome_invalido', message: 'Informe um nome com pelo menos 2 caracteres.' });
+    return res.status(400).json({
+      code: 'nome_invalido',
+      error: 'Informe um nome com pelo menos 2 caracteres.',
+      message: 'Informe um nome com pelo menos 2 caracteres.',
+    });
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ error: 'email_invalido', message: 'Informe um e-mail válido.' });
+    return res.status(400).json({
+      code: 'email_invalido',
+      error: 'Informe um e-mail válido.',
+      message: 'Informe um e-mail válido.',
+    });
   }
   if (password.length < 6) {
-    return res.status(400).json({ error: 'senha_curta', message: 'A senha precisa ter pelo menos 6 caracteres.' });
+    return res.status(400).json({
+      code: 'senha_curta',
+      error: 'A senha precisa ter pelo menos 6 caracteres.',
+      message: 'A senha precisa ter pelo menos 6 caracteres.',
+    });
   }
 
   const { data: exists } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
   if (exists) {
-    return res.status(409).json({ error: 'email_em_uso', message: 'Este e-mail já está cadastrado. Faça login.' });
+    return res.status(409).json({
+      code: 'email_em_uso',
+      error: 'Este e-mail já está cadastrado. Faça login.',
+      message: 'Este e-mail já está cadastrado. Faça login.',
+    });
   }
 
-  const { data: created, error } = await supabase
-    .from('users')
-    .insert({
+  const created = await insertUserSafe(
+    {
       email,
       username: name,
       password_hash: hashPassword(password),
       community: loginCommunity,
-    })
-    .select('id, username, email, avatar, discord_id')
-    .single();
-  if (error) throw error;
+    },
+    'id, username, email, avatar, discord_id, google_id'
+  );
 
-  await createSession(res, created.id);
+  await createSession(req, res, created.id);
   res.status(201).json({ ok: true, user: formatPortalUser(created) });
 });
 
@@ -718,7 +865,11 @@ const handleLogin = run(async (req, res) => {
   const password = String(req.body?.password ?? '');
 
   if (!loginInput || !password) {
-    return res.status(400).json({ error: 'dados_incompletos', message: 'Preencha e-mail/usuário e senha.' });
+    return res.status(400).json({
+      code: 'dados_incompletos',
+      error: 'Preencha e-mail/usuário e senha.',
+      message: 'Preencha e-mail/usuário e senha.',
+    });
   }
 
   const query = supabase
@@ -729,26 +880,35 @@ const handleLogin = run(async (req, res) => {
     : await query.ilike('username', loginInput).limit(1).maybeSingle();
 
   if (!user) {
-    return res.status(401).json({ error: 'credenciais_invalidas', message: 'Usuário/e-mail ou senha incorretos.' });
+    return res.status(401).json({
+      code: 'credenciais_invalidas',
+      error: 'Usuário/e-mail ou senha incorretos.',
+      message: 'Usuário/e-mail ou senha incorretos.',
+    });
   }
   if (!user.password_hash) {
     const metodo = user.google_id ? 'Google' : 'Discord';
     return res.status(400).json({
-      error: 'usar_oauth',
-      message: `Esta conta foi criada com ${metodo}. Continue usando o ícone do ${metodo}.`,
+      code: 'usar_oauth',
+      error: `Esta conta foi criada com ${metodo}. Continue usando o botão do ${metodo}.`,
+      message: `Esta conta foi criada com ${metodo}. Continue usando o botão do ${metodo}.`,
     });
   }
   if (!verifyPassword(password, user.password_hash)) {
-    return res.status(401).json({ error: 'credenciais_invalidas', message: 'Usuário/e-mail ou senha incorretos.' });
+    return res.status(401).json({
+      code: 'credenciais_invalidas',
+      error: 'Usuário/e-mail ou senha incorretos.',
+      message: 'Usuário/e-mail ou senha incorretos.',
+    });
   }
 
-  await createSession(res, user.id);
+  await createSession(req, res, user.id);
   res.json({ ok: true, user: formatPortalUser(user) });
 });
 
 const handleLogout = run(async (req, res) => {
-  if (req.cookies.sid) await supabase.from('sessions').delete().eq('id', req.cookies.sid);
-  res.clearCookie('sid');
+  if (req.cookies?.sid) await supabase.from('sessions').delete().eq('id', req.cookies.sid);
+  res.clearCookie('sid', { path: '/' });
   res.json({ ok: true });
 });
 
@@ -757,7 +917,7 @@ app.post(['/auth/login', '/api/auth/login'], strict, handleLogin);
 app.post(['/auth/logout', '/api/auth/logout'], handleLogout);
 
 /* ---------- Endpoints usados pelo app.js (Portal Vulpora) ---------- */
-app.get('/api/auth/me', (req, res) => {
+app.get(['/auth/me', '/api/auth/me'], (req, res) => {
   res.json({ user: formatPortalUser(req.user) });
 });
 
@@ -832,7 +992,6 @@ app.post(
   })
 );
 
-// Criação de novas comunidades no banco herdando o mesmo design e recebendo cores próprias
 app.post(
   '/api/admin/communities',
   requireAuth,
@@ -938,6 +1097,7 @@ app.get(
 /* ---------- Evento e missões ---------- */
 app.get(
   '/api/event',
+  requireAuth,
   run(async (req, res) => {
     const ev = eventState();
     const community = getReqCommunity(req);
@@ -978,7 +1138,7 @@ app.get(
       status: ev.status,
       today: ev.today,
       finale: ev.finale,
-      start: EVENT_START,
+      start: getEnv('EVENT_START', '2026-12-01'),
       community,
       communityMeta: meta,
       missions,
@@ -1373,12 +1533,10 @@ if (existsSync(CLIENT_DIST_DIR)) {
   app.use(express.static(CLIENT_DIST_DIR, { index: false }));
 }
 
-// Normaliza slug legado 'ducks' -> 'heaven'
 app.get(/^\/comunidade\/ducks(\/.*)?$/i, (req, res) => {
   res.redirect(302, req.path.replace(/^\/comunidade\/ducks/i, '/comunidade/heaven'));
 });
 
-// 1) Evento de Natal -> entrega o React compilado (EventLayout.jsx)
 app.get(/^\/comunidade\/[^/]+\/natal(\/.*)?$/i, (req, res) => {
   const builtEventHtml = path.join(PUBLIC_DIR, 'index.html');
   const devEventHtml = path.join(CLIENT_DIR, 'index.html');
@@ -1387,16 +1545,14 @@ app.get(/^\/comunidade\/[^/]+\/natal(\/.*)?$/i, (req, res) => {
   res.status(404).send('<h1>Build do evento não encontrado.</h1>');
 });
 
-// 2) Qualquer outra rota acessada sem # é convertida para /#/... no Portal Vulpora
-app.get(/^\/(login|cadastro|comunidades|perfil|portal(\/.*)?|comunidade(\/.*)?)$/i, (req, res) => {
+app.get(/^\/(login|cadastro|comunidades|perfil(\/.*)?|usuario(\/.*)?|evento(\/.*)?|admin(\/.*)?|portal(\/.*)?|comunidade(\/.*)?)$/i, (req, res) => {
   const target = req.path
     .replace(/^\/comunidades\/?$/i, '/portal/comunidades')
-    .replace(/^\/comunidade\/([^/]+)\/?$/i, '/comunidade/$1/eventos');
+    .replace(/^\/comunidade\/([^/]+)\/?$/i, '/comunidade/$1/inicio');
 
   res.redirect(302, `/#${target}`);
 });
 
-// 3) Portal Vulpora -> entrega vulpora.html (app.js + global.css)
 app.get('*', (req, res) => {
   const builtPortalHtml = path.join(PUBLIC_DIR, 'vulpora.html');
   const devPortalHtml = path.join(CLIENT_PUBLIC_DIR, 'vulpora.html');
@@ -1410,7 +1566,7 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.status === 413 ? 'corpo_grande' : 'erro_interno' });
 });
 
-if (!VERCEL) {
+if (!IS_SERVERLESS) {
   setInterval(() => supabase.from('sessions').delete().lt('expires_at', Date.now()), 3600_000).unref();
   const server = app.listen(PORT, () => {
     const ev = eventState();
@@ -1419,8 +1575,8 @@ if (!VERCEL) {
       `• Início (Portal):    http://localhost:${PORT}/#/\n` +
       `• Login:              http://localhost:${PORT}/#/login\n` +
       `• Seleção Comunidade: http://localhost:${PORT}/#/portal/comunidades\n` +
-      `• The Kingdom:        http://localhost:${PORT}/#/comunidade/thekingdom/eventos\n` +
-      `• Heaven:             http://localhost:${PORT}/#/comunidade/heaven/eventos\n` +
+      `• The Kingdom:        http://localhost:${PORT}/#/comunidade/thekingdom/inicio\n` +
+      `• Heaven:             http://localhost:${PORT}/#/comunidade/heaven/inicio\n` +
       `• Evento Natal:       http://localhost:${PORT}/comunidade/thekingdom/natal\n` +
       `(Evento Natal Mágico: ${ev.status}, dia ${ev.today})\n`
     );

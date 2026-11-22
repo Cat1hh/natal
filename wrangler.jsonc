@@ -23,7 +23,7 @@
     "EVENT_START": "2026-12-01",
     // Troque pela URL real depois do primeiro deploy e, mais tarde, pelo seu domínio.
     // O login do Discord usa isto: cadastre BASE_URL + /auth/discord/callback no Discord Developer Portal.
-    "BASE_URL": "https://vulpora-natal.gustavo-simoncini5.workers.dev"
+    "BASE_URL": "https://vulpora.com.br"
   },
 
   "assets": {

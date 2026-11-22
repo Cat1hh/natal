@@ -70,16 +70,13 @@ const ADVENT_CATALOG = {
     level: 'Média',
     basePoints: 35,
     needsReview: false,
-    heaven: 'Encontre NEVE, OURO, ESTRELA e LAÇO no tabuleiro 12×12. Insira a senha formada pelas letras iniciais nessa ordem, sem espaços ou acentos.',
-    kingdom: 'Encontre RABANADA, ESTRELA, NEVE e OURO no tabuleiro 12×12. Insira a senha formada pelas letras iniciais nessa ordem, sem espaços ou acentos.',
   },
   3: {
     title: 'Memória dos símbolos',
     level: 'Fácil',
     basePoints: 20,
     needsReview: false,
-    heaven: 'Vire cartas e encontre os 8 pares (SINO, GORRO, NEVE, ESTRELA, LAÇO, VELA, PRESENTE, BENGALA) antes de ultrapassar 24 tentativas de par.',
-    kingdom: 'Vire cartas e encontre os 8 pares (RENA, CARTA, LUVA, PINHEIRO, LUZ, FLOCO, BOTA, BISCOITO) antes de ultrapassar 24 tentativas de par.',
+ 
   },
   4: {
     title: 'Oficina de embrulhos',
@@ -166,8 +163,6 @@ const ADVENT_CATALOG = {
     level: 'Média',
     basePoints: 35,
     needsReview: false,
-    heaven: 'Encontre ÁRVORE, NEVE, JOGO e OURO no segundo tabuleiro 12×12 e forme a senha com as letras iniciais nessa ordem.',
-    kingdom: 'Encontre LAÇO, URSO, ANJO e RABANADA no segundo tabuleiro 12×12 e forme a senha com as letras iniciais nessa ordem.',
   },
   15: {
     title: 'Corrida da oficina',

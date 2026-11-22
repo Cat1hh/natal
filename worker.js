@@ -1,19 +1,27 @@
 import './boot.js'; // PRECISA ser o primeiro import
 import { handleAsNodeRequest } from 'cloudflare:node';
 
+globalThis.__CLOUDFLARE_WORKER__ = true;
+
 const PORT = 3000;
 let expressReady;
 
-// O server.js cria coisas que o Workers só permite DENTRO de uma requisição (timers do express-rate-limit,
-// valores aleatórios, chamadas de rede). Por isso ele é carregado na primeira requisição, e não ao iniciar.
-// O server.js não chama listen no modo serverless, então registramos o Express aqui.
+function syncWorkerEnv(env) {
+  if (!env || typeof env !== 'object') return;
+  for (const [key, value] of Object.entries(env)) {
+    if (typeof value === 'string' && !process.env[key]) {
+      process.env[key] = value;
+    }
+  }
+}
+
 function loadExpress() {
   expressReady ??= import('./server.js')
     .then(({ default: app }) => {
       app.listen(PORT);
     })
     .catch((error) => {
-      expressReady = undefined; // tenta de novo na próxima requisição
+      expressReady = undefined;
       throw error;
     });
   return expressReady;
@@ -21,7 +29,6 @@ function loadExpress() {
 
 const isExpressPath = (p) => /^\/(api|auth)(\/|$)/i.test(p) || p === '/healthz';
 
-// Entrega um HTML da pasta public/ (assets).
 function page(request, env, file) {
   const url = new URL(request.url);
   url.pathname = file;
@@ -29,9 +36,8 @@ function page(request, env, file) {
   return env.ASSETS.fetch(new Request(url, { method: request.method, headers: request.headers }));
 }
 
-// Repassa a requisição ao Express. O Worker não manda IP nem protocolo no formato que o Express espera,
-// então copiamos do cabeçalho da Cloudflare (sem isso, o rate limit enxerga todo mundo como o mesmo IP).
-async function toExpress(request) {
+async function toExpress(request, env) {
+  syncWorkerEnv(env);
   await loadExpress();
   const url = new URL(request.url);
   const headers = new Headers(request.headers);
@@ -46,8 +52,13 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // www -> domínio principal (o servidor confere o Origin contra o BASE_URL)
+    if (url.hostname === 'www.vulpora.com.br') {
+      return Response.redirect(`https://vulpora.com.br${path}${url.search}`, 301);
+    }
+
     // API, login e saúde -> Express
-    if (isExpressPath(path)) return toExpress(request);
+    if (isExpressPath(path)) return toExpress(request, env);
 
     // Slug legado: ducks -> heaven
     if (/^\/comunidade\/ducks(\/|$)/i.test(path)) {
@@ -61,10 +72,10 @@ export default {
     }
 
     // Rotas do portal acessadas sem "#" -> /#/...
-    if (/^\/(login|cadastro|comunidades|perfil|portal(\/.*)?|comunidade(\/.*)?)$/i.test(path)) {
+    if (/^\/(login|cadastro|comunidades|perfil(\/.*)?|usuario(\/.*)?|evento(\/.*)?|admin(\/.*)?|portal(\/.*)?|comunidade(\/.*)?)$/i.test(path)) {
       const target = path
         .replace(/^\/comunidades\/?$/i, '/portal/comunidades')
-        .replace(/^\/comunidade\/([^/]+)\/?$/i, '/comunidade/$1/eventos');
+        .replace(/^\/comunidade\/([^/]+)\/?$/i, '/comunidade/$1/inicio');
       return Response.redirect(`${url.origin}/#${target}`, 302);
     }
 
