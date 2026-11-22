@@ -1,10 +1,6 @@
-node_modules
-client/node_modules
-data
-public
-.env.dev.vars
-
-.dev.vars
-
-.env
+node_modules/
+client/node_modules/
 .wrangler/
+.env
+.env.*
+.dev.vars
