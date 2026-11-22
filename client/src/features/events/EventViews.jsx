@@ -3,15 +3,39 @@ import { Icon } from '../../icons.jsx';
 import { Avatar, CommunityTag } from '../../components/SharedUI.jsx';
 import { Tree } from './natal/Tree.jsx';
 import { AdventDayGame } from './natal/AdventGames.jsx';
+import {
+  approveAllPendingForTest,
+  loadAdventState,
+  resetAdventTestState,
+  submitAdventMission,
+} from './natal/adventScoring.js';
 import { isFinaleNow } from './finale.js';
 
 const MEDAL_COLOR = ['#F4A51D', '#E2D8CE', '#C87D3B'];
 const TOTAL_DAYS = 25;
 const RANK_OPEN_DATE = new Date('2026-12-25T00:00:00-03:00').getTime();
 
-/* Modo de teste: libera todas as 25 missões no Calendário, Home e Modal.
+/* Modo de teste: libera todas as 25 missões e habilita controles rápidos de validação/aprovação.
    Altere para false antes de publicar em produção. */
 const UNLOCK_ALL_FOR_TEST = true;
+
+/* Hook reativo para sincronizar pontos, status das portas e ranking em tempo real */
+function useLocalAdventProgress(isHeaven) {
+  const [state, setState] = useState(() => loadAdventState(isHeaven));
+
+  useEffect(() => {
+    setState(loadAdventState(isHeaven));
+    const sync = () => setState(loadAdventState(isHeaven));
+    window.addEventListener('advent:state-updated', sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener('advent:state-updated', sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, [isHeaven]);
+
+  return state;
+}
 
 /* Rascunho da cartinha: sobrevive a fechar o modal sem querer (Esc, clique fora, F5). */
 const DRAFT_KEY = 'natal:letter-draft';
@@ -166,8 +190,8 @@ const ADVENT_CATALOG = {
     level: 'Difícil',
     basePoints: 50,
     needsReview: false,
-    heaven: 'Resolva as cinco palavras horizontais da Heaven e use a coluna central contínua para descobrir a palavra vertical de nove letras.',
-    kingdom: 'Resolva as cinco palavras horizontais da The Kingdom e use a coluna central contínua para descobrir a palavra vertical de nove letras.',
+    heaven: 'Resolva as nove palavras horizontais da Heaven e use a coluna central contínua para descobrir a palavra vertical de nove letras.',
+    kingdom: 'Resolva as nove palavras horizontais da The Kingdom e use a coluna central contínua para descobrir a palavra vertical de nove letras.',
   },
   18: {
     title: 'Encontre as diferenças',
@@ -214,8 +238,8 @@ const ADVENT_CATALOG = {
     level: 'Difícil',
     basePoints: 50,
     needsReview: false,
-    heaven: 'Descubra a ordem exata das quatro entregas (18h às 21h) entre DOCE, SINO, LAÇO e LIVRO seguindo as pistas e separe por vírgulas.',
-    kingdom: 'Descubra a ordem exata das quatro entregas (18h às 21h) entre ESTRELA, NEVE, CARTA e PRESENTE seguindo as pistas e separe por vírgulas.',
+    heaven: 'Descubra a ordem exata das quatro entregas (18h às 21h) entre DOCE, SINO, LAÇO e LIVRO seguindo as pistas.',
+    kingdom: 'Descubra a ordem exata das quatro entregas (18h às 21h) entre ESTRELA, NEVE, CARTA e PRESENTE seguindo as pistas.',
   },
   24: {
     title: 'A última busca',
@@ -244,21 +268,38 @@ const TEAM_CREDITS = [
   ['Moderação & Premiações', 'Aprovar conteúdos, resolver dúvidas, avaliar recursos e confirmar recompensas.'],
 ];
 
-function enrichMission(m = {}, isHeaven = false) {
+function isHeavenCommunity(communityMeta) {
+  if (communityMeta && (communityMeta.slug || communityMeta.tag || communityMeta.name)) {
+    const metaHint = [communityMeta.slug, communityMeta.tag, communityMeta.name]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return metaHint.includes('heaven') || metaHint.includes('heavem') || metaHint.includes('ducks');
+  }
+
+  const pathHint = typeof window !== 'undefined' ? window.location.pathname.toLowerCase() : '';
+  return pathHint.includes('heaven') || pathHint.includes('heavem') || pathHint.includes('ducks');
+}
+
+function enrichMission(m = {}, isHeaven = false, localMission = null) {
   const day = Number(m.day) || 1;
   const meta = ADVENT_CATALOG[day] || {};
-  const rawStatus = m.status || 'locked';
-  const status = UNLOCK_ALL_FOR_TEST && rawStatus === 'locked' ? 'open' : rawStatus;
+  const baseStatus = localMission?.status || m.status || 'locked';
+  const status = UNLOCK_ALL_FOR_TEST && baseStatus === 'locked' ? 'open' : baseStatus;
+  const catalogObjective = isHeaven ? meta.heaven : meta.kingdom;
 
   return {
     ...m,
     day,
     status,
-    title: m.title || meta.title || `Desafio do Dia ${day}`,
-    level: m.level || meta.level || 'Fácil',
-    points: m.points ?? meta.basePoints ?? 20,
-    needsReview: m.needsReview ?? meta.needsReview ?? false,
-    objective: m.objective || (isHeaven ? meta.heaven : meta.kingdom) || 'Conclua a atividade do dia na VULPORA.',
+    _isHeaven: isHeaven,
+    errors: localMission?.errors ?? m.errors ?? 0,
+    earnedPoints: localMission?.earnedPoints ?? m.earnedPoints ?? null,
+    title: meta.title || m.title || `Desafio do Dia ${day}`,
+    level: meta.level || m.level || 'Fácil',
+    points: meta.basePoints ?? m.points ?? 20,
+    needsReview: meta.needsReview ?? m.needsReview ?? false,
+    objective: catalogObjective || m.objective || 'Conclua a atividade do dia na VULPORA.',
   };
 }
 
@@ -327,20 +368,6 @@ const HEAVEN_HOTSPOTS = {
   24: { top: '79.5%', left: '41.7%', width: '18.8%', height: '19.0%' },
   25: { top: '79.5%', left: '61.7%', width: '36.8%', height: '19.0%' },
 };
-
-function isHeavenCommunity(communityMeta) {
-  const hint = [
-    communityMeta?.slug,
-    communityMeta?.tag,
-    communityMeta?.name,
-    typeof window !== 'undefined' ? window.location.pathname : '',
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-
-  return hint.includes('heaven') || hint.includes('heavem') || hint.includes('ducks');
-}
 
 function EventCountdownBanner({ ev, commName, commTag, commTheme, onBackToCommunity }) {
   const [now, setNow] = useState(() => Date.now());
@@ -505,13 +532,26 @@ function EventCountdownBanner({ ev, commName, commTag, commTheme, onBackToCommun
 
 export function Home({ me = {}, ev = {}, communityMeta, letters = [], onOpen, onWrite, onMission, onBackToCommunity }) {
   const isHeaven = isHeavenCommunity(communityMeta);
+  const localProg = useLocalAdventProgress(isHeaven);
+
   const rawMissions = ev?.missions || [];
-  const missions = rawMissions.map((item) => enrichMission(item, isHeaven));
+  const missions = rawMissions.map((item) =>
+    enrichMission(item, isHeaven, localProg.missions[item.day])
+  );
   const total = missions.length || TOTAL_DAYS;
   const today = ev?.today || 1;
-  const missionsDone = Math.min(me?.missionsDone || 0, total);
+
+  const localDoneCount = Object.values(localProg.missions).filter((x) => x?.status === 'done').length;
+  const missionsDone = Math.min(Math.max(me?.missionsDone || 0, localDoneCount), total);
+  const displayPoints = Math.max(me?.points || 0, localProg.points || 0);
+
   const todayIdx = Math.min(Math.max(today, 1), Math.max(missions.length, 1)) - 1;
-  const m = missions[todayIdx] || enrichMission({ day: today, status: 'open' }, isHeaven);
+  const m = enrichMission(
+    missions[todayIdx] || { day: today, status: 'open' },
+    isHeaven,
+    localProg.missions[today]
+  );
+
   const C = 2 * Math.PI * 42;
   const rest = Math.max(0, TOTAL_DAYS - today);
   const commName = communityMeta?.name || 'Comunidade';
@@ -600,9 +640,7 @@ export function Home({ me = {}, ev = {}, communityMeta, letters = [], onOpen, on
             </div>
           </div>
           <p className="m center">
-            {me?.points != null
-              ? `${me.points} pontos acumulados · ${missionsDone >= 3 ? 'Lembrança garantida!' : '3 aprovadas garantem lembrança'}`
-              : 'Conclua missões para subir no ranking'}
+            {`${displayPoints} pontos acumulados · ${missionsDone >= 3 ? 'Lembrança garantida!' : '3 aprovadas garantem lembrança'}`}
           </p>
           {m ? (
             <>
@@ -648,6 +686,7 @@ export function Calendar({ ev = {}, communityMeta, onMission }) {
   const [selectedDay, setSelectedDay] = useState(null);
   const missions = ev?.missions || [];
   const isHeaven = isHeavenCommunity(communityMeta);
+  const localProg = useLocalAdventProgress(isHeaven);
 
   const hotspots = isHeaven ? HEAVEN_HOTSPOTS : KINGDOM_HOTSPOTS;
   const calendarImage = isHeaven
@@ -657,8 +696,10 @@ export function Calendar({ ev = {}, communityMeta, onMission }) {
   const doors = Array.from({ length: TOTAL_DAYS }, (_, i) => {
     const day = i + 1;
     const raw = missions.find((item) => item.day === day) || { day, status: 'locked' };
-    return enrichMission(raw, isHeaven);
+    return enrichMission(raw, isHeaven, localProg.missions[day]);
   });
+
+  const pendingCount = doors.filter((d) => d.status === 'pending').length;
 
   const handleSelect = (m) => {
     if (m.status === 'locked') return;
@@ -676,6 +717,37 @@ export function Calendar({ ev = {}, communityMeta, onMission }) {
         <p className="m">
           Toque em uma porta liberada para abrir a atividade de {communityMeta?.name || 'Comunidade'}.
         </p>
+
+        {UNLOCK_ALL_FOR_TEST && (
+          <div
+            style={{
+              marginTop: 10,
+              display: 'flex',
+              gap: 8,
+              flexWrap: 'wrap',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <span className="badge gold">Pontos atuais: {localProg.points || 0} pts</span>
+            {pendingCount > 0 && (
+              <button
+                type="button"
+                className="btn pine"
+                onClick={() => approveAllPendingForTest(isHeaven)}
+              >
+                Aprovar {pendingCount} pendente{pendingCount > 1 ? 's' : ''} (teste)
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => resetAdventTestState(isHeaven)}
+            >
+              Resetar pontos de teste
+            </button>
+          </div>
+        )}
       </div>
 
       <div className={`advent-image-stage ${isHeaven ? 'is-heaven' : ''}`}>
@@ -765,6 +837,7 @@ export function Calendar({ ev = {}, communityMeta, onMission }) {
 }
 
 export function Ranking({ rk, isCommunity = false, unlocked, isHeaven = false, compact = false }) {
+  const localProg = useLocalAdventProgress(isHeaven);
   const isUnlocked = unlocked ?? (isCommunity || isFinaleNow() || Date.now() >= RANK_OPEN_DATE);
 
   if (!isUnlocked) {
@@ -795,9 +868,24 @@ export function Ranking({ rk, isCommunity = false, unlocked, isHeaven = false, c
     );
   }
 
-  const list = (rk?.ranking || []).map((r, i) => ({ ...r, position: r.position ?? i + 1 }));
+  const baseList = [...(rk?.ranking || [])];
+  if (localProg.points > 0 && !baseList.some((item) => item.isLocalMe)) {
+    baseList.push({
+      id: 'local-me',
+      name: 'Você',
+      points: localProg.points,
+      isLocalMe: true,
+    });
+  }
+
+  const list = baseList
+    .sort((a, b) => (b.points || 0) - (a.points || 0))
+    .map((r, i) => ({ ...r, position: i + 1 }));
+
   const top = [1, 0, 2].map((i) => list[i]).filter(Boolean);
   const others = list.slice(3);
+  const myPoints = Math.max(rk?.me?.points || 0, localProg.points || 0);
+  const myPos = list.find((r) => r.isLocalMe)?.position ?? rk?.me?.position ?? null;
 
   return (
     <div className="rk-wrap">
@@ -860,14 +948,14 @@ export function Ranking({ rk, isCommunity = false, unlocked, isHeaven = false, c
         </div>
       )}
 
-      {rk?.me && (
+      {(rk?.me || localProg.points > 0) && (
         <div className="row me">
-          <span className="pos">{rk.me.position != null ? `${rk.me.position}º` : '—'}</span>
+          <span className="pos">{myPos != null ? `${myPos}º` : '—'}</span>
           <span className="av">
             <Icon name="star" size={16} />
           </span>
           <b>Você</b>
-          <b className="pts">{rk.me.points} pts</b>
+          <b className="pts">{myPoints} pts</b>
         </div>
       )}
 
@@ -894,7 +982,11 @@ export function Ranking({ rk, isCommunity = false, unlocked, isHeaven = false, c
   );
 }
 
-export function Prizes({ pz = {}, done = 0 }) {
+export function Prizes({ pz = {}, done = 0, isHeaven = false }) {
+  const localProg = useLocalAdventProgress(isHeaven);
+  const localDone = Object.values(localProg.missions).filter((x) => x?.status === 'done').length;
+  const totalDone = Math.max(done, localDone);
+
   const prizes = pz?.prizes || [];
   const milestones = pz?.milestones || [];
 
@@ -918,7 +1010,7 @@ export function Prizes({ pz = {}, done = 0 }) {
 
       {milestones.length > 0 && <h3>Lembrança de participação (3 atividades aprovadas)</h3>}
       {milestones.map((k) => {
-        const ok = done >= k.missions;
+        const ok = totalDone >= k.missions;
         return (
           <div key={k.missions} className={`row ${ok ? 'ok' : ''}`}>
             <span className="pos" style={ok ? { color: 'var(--gold, #F4A51D)' } : undefined}>
@@ -940,12 +1032,23 @@ export function Prizes({ pz = {}, done = 0 }) {
 export function MissionModal({ m, communityMeta, isHeaven: isHeavenProp, onSubmit }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [feedback, setFeedback] = useState(null);
   const lock = useRef(false);
+
+  const isHeaven =
+    isHeavenProp ??
+    (communityMeta ? isHeavenCommunity(communityMeta) : (m?._isHeaven ?? isHeavenCommunity()));
+  const localProg = useLocalAdventProgress(isHeaven);
+
+  useEffect(() => {
+    setError('');
+    setFeedback(null);
+  }, [m?.day, isHeaven]);
 
   if (!m) return null;
 
-  const isHeaven = isHeavenProp ?? isHeavenCommunity(communityMeta);
-  const enriched = enrichMission(m, isHeaven);
+  const localMission = localProg.missions[Number(m.day)];
+  const enriched = enrichMission(m, isHeaven, localMission);
 
   const done = enriched.status === 'done';
   const pend = enriched.status === 'pending';
@@ -957,8 +1060,19 @@ export function MissionModal({ m, communityMeta, isHeaven: isHeavenProp, onSubmi
     lock.current = true;
     setBusy(true);
     setError('');
+    setFeedback(null);
+
     try {
-      await onSubmit?.(enriched.day, serializedPayload);
+      const result = submitAdventMission(enriched.day, serializedPayload, isHeaven);
+      setFeedback(result);
+
+      if (onSubmit) {
+        try {
+          await onSubmit(enriched.day, serializedPayload, result);
+        } catch {
+          /* Se a API remota ainda não estiver ativa no ambiente de teste, mantém o resultado local */
+        }
+      }
     } catch (e) {
       setError(e?.message || 'Não foi possível enviar. Tente novamente.');
     } finally {
@@ -972,32 +1086,54 @@ export function MissionModal({ m, communityMeta, isHeaven: isHeavenProp, onSubmi
       <div className="who-name" style={{ marginBottom: 6 }}>
         <span className="badge gold">{enriched.level} · +{enriched.points} pts base</span>
         <span className="badge">{isHeaven ? 'Heaven (Ducks)' : 'The Kingdom (Discord)'}</span>
-        {UNLOCK_ALL_FOR_TEST && <span className="badge">Teste ativo</span>}
+        {enriched.errors > 0 && !done && (
+          <span className="badge">Erros: {enriched.errors}/5</span>
+        )}
       </div>
+
       <h3>
         Dia {enriched.day} · {enriched.title}
       </h3>
+
       <div className="paper">
         <b>Desafio:</b> {enriched.objective}
       </div>
-      <p className="m small" style={{ marginTop: 8 }}>
-        Bônus: +25 no dia da abertura (cai 1/dia até +1), +10 nos primeiros 60 min e +25 na 1ª tentativa. Erros confirmados descontam -1, -2, -3... (pausa de 30 min após 5 erros).
-      </p>
 
-      {isHeaven && !locked && (
-        <p className="m small" style={{ marginTop: 6 }}>
-          <b>Comprovação Heaven (Ducks):</b> publique sua participação na Heaven sem revelar senhas ou respostas e cole o link/print abaixo (prazo de até 24h após concluir).
-        </p>
-      )}
-      {!isHeaven && !locked && (
-        <p className="m small" style={{ marginTop: 6 }}>
-          <b>The Kingdom (Discord):</b> envio direto na VULPORA, sem necessidade de postar no Discord.
-        </p>
+      {enriched.status === 'rejected' && (
+        <div className="err" style={{ marginTop: 10 }}>
+          Sua comprovação anterior precisa de ajuste. Envie novamente.
+        </div>
       )}
 
-      {enriched.status === 'rejected' && <div className="err">Sua comprovação anterior precisa de ajuste. Envie novamente.</div>}
-      {error && <div className="err" role="alert">{error}</div>}
-      {locked && <p className="m">Esta porta abre em {String(enriched.day).padStart(2, '0')}/12 às 00:00 (horário de Brasília).</p>}
+      {error && (
+        <div className="err" role="alert" style={{ marginTop: 10 }}>
+          {error}
+        </div>
+      )}
+
+      {feedback?.status === 'done' && feedback.score && (
+        <div className="paper" style={{ marginTop: 10, borderColor: 'rgba(244, 165, 29, 0.45)' }}>
+          <b>Concluído! +{feedback.score.totalEarned} pontos creditados</b>
+          <p className="m small" style={{ margin: '4px 0 0' }}>
+            Base: +{feedback.score.basePoints} · Data: +{feedback.score.dateBonus} · Rapidez: +{feedback.score.speedBonus} · 1ª tentativa: +{feedback.score.firstTryBonus}
+          </p>
+        </div>
+      )}
+
+      {feedback?.status === 'pending' && feedback.score && (
+        <div className="paper" style={{ marginTop: 10, borderColor: 'rgba(244, 165, 29, 0.45)' }}>
+          <b>Enviado para revisão da equipe!</b>
+          <p className="m small" style={{ margin: '4px 0 0' }}>
+            Pontuação prevista após aprovação: <b>+{feedback.score.totalEarned} pts</b> (Base +{feedback.score.basePoints}, Data +{feedback.score.dateBonus}, Rapidez +{feedback.score.speedBonus}, 1ª tentativa +{feedback.score.firstTryBonus}).
+          </p>
+        </div>
+      )}
+
+      {locked && (
+        <p className="m" style={{ marginTop: 10 }}>
+          Esta porta abre em {String(enriched.day).padStart(2, '0')}/12 às 00:00 (horário de Brasília).
+        </p>
+      )}
 
       {requiresInput && (
         <div style={{ marginTop: 12 }}>
@@ -1015,6 +1151,7 @@ export function MissionModal({ m, communityMeta, isHeaven: isHeavenProp, onSubmi
           {done ? (
             <span className="badge pine">
               <Icon name="check" size={14} /> Atividade concluída
+              {enriched.earnedPoints ? ` (+${enriched.earnedPoints} pts)` : ''}
             </span>
           ) : (
             <span className="badge bronze">

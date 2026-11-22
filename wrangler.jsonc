@@ -1,0 +1,48 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "vulpora-natal",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-16",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // O iconv-lite (usado pelo express.json) quebra no Workers; este arquivo o substitui no bundle.
+  "alias": {
+    "iconv-lite": "./shims/iconv-lite.cjs"
+  },
+
+  // No Workers o import.meta.url não existe, e o server.js faz fileURLToPath(import.meta.url) para achar pastas.
+  // Aqui damos um valor fixo. Os caminhos não existem no Workers de qualquer forma (quem serve os arquivos são os assets).
+  "define": {
+    "import.meta.url": "\"file:///worker/server.js\""
+  },
+
+  // Variáveis que NÃO são secretas. Os secrets entram por `npx wrangler secret put NOME`.
+  "vars": {
+    "NODE_ENV": "production",
+    "TRUST_PROXY": "1",
+    "EVENT_START": "2026-12-01",
+    // Troque pela URL real depois do primeiro deploy e, mais tarde, pelo seu domínio.
+    // O login do Discord usa isto: cadastre BASE_URL + /auth/discord/callback no Discord Developer Portal.
+    "BASE_URL": "https://vulpora-natal.gustavo-simoncini5.workers.dev"
+  },
+
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    // "none" evita que /index.html seja redirecionado para "/" quando o worker busca o arquivo.
+    "html_handling": "none",
+    // Só estes caminhos passam pelo Worker. Tudo o mais (app.js, css, imagens) sai direto dos assets.
+    "run_worker_first": [
+      "/",
+      "/api/*",
+      "/auth/*",
+      "/healthz",
+      "/comunidade/*",
+      "/comunidades",
+      "/login",
+      "/cadastro",
+      "/perfil",
+      "/portal/*"
+    ]
+  }
+}

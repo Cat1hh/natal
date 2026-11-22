@@ -292,7 +292,6 @@ function buildDeck(symbols) {
     { uid: `${idx}-a`, pairId: idx, label },
     { uid: `${idx}-b`, pairId: idx, label },
   ]);
-  // Embaralhamento determinístico misturado com timestamp da sessão
   const arr = [...base];
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -311,7 +310,7 @@ function MemoryGame({ isHeaven, busy, onSend }) {
 
   const matchedCount = Object.keys(matched).length;
   const completed = matchedCount === 8;
-  const exceeded = attempts > 24 && !completed;
+  const exceeded = attempts > 24;
 
   const reset = () => {
     setDeck(buildDeck(symbols));
@@ -350,7 +349,7 @@ function MemoryGame({ isHeaven, busy, onSend }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
         <span className="badge gold">Pares: {matchedCount}/8</span>
-        <span className={`badge ${attempts > 24 ? 'red' : ''}`}>Tentativas: {attempts}/24</span>
+        <span className={`badge ${exceeded ? 'red' : ''}`}>Tentativas: {attempts}/24</span>
       </div>
 
       <div
@@ -525,6 +524,8 @@ function SorterGame({ day, isHeaven, busy, onSend }) {
 /* Dias 5 e 19 — Textos com validação de tamanho e palavras-chave             */
 /* -------------------------------------------------------------------------- */
 
+const XMAS_EXPRESSIONS = ['NATAL', 'BOAS FESTAS', 'FELIZ', 'NOEL', 'ANO NOVO', 'DEZEMBRO'];
+
 function GuidedTextGame({ day, isHeaven, busy, onSend }) {
   const [text, setText] = useState('');
   const [ducksLink, setDucksLink] = useState('');
@@ -539,6 +540,7 @@ function GuidedTextGame({ day, isHeaven, busy, onSend }) {
   const clean = text.trim();
   const upper = normalizeUpper(clean);
   const hasKeywords = requiredWords.every((w) => upper.includes(w));
+  const hasXmasExpr = isDay5 ? true : XMAS_EXPRESSIONS.some((w) => upper.includes(w));
   const lenOk = clean.length >= minLen && clean.length <= maxLen;
 
   const handleSend = () => {
@@ -554,9 +556,14 @@ function GuidedTextGame({ day, isHeaven, busy, onSend }) {
         </span>
         {requiredWords.map((w) => (
           <span key={w} className={`badge ${upper.includes(w) ? 'pine' : ''}`}>
-            Palavra obrigatória: {w}
+            Obrigatória: {w}
           </span>
         ))}
+        {!isDay5 && (
+          <span className={`badge ${hasXmasExpr ? 'pine' : ''}`}>
+            Expressão de Natal
+          </span>
+        )}
       </div>
 
       <textarea
@@ -567,14 +574,14 @@ function GuidedTextGame({ day, isHeaven, busy, onSend }) {
         placeholder={
           isDay5
             ? `Escreva sua carta ao Noelvet (${minLen} a ${maxLen} caracteres)...`
-            : `Escreva sua mensagem (${minLen} a ${maxLen} caracteres) com expressão de Natal...`
+            : `Escreva sua mensagem (${minLen} a ${maxLen} caracteres) mencionando ${isHeaven ? 'HEAVEN' : 'KINGDOM'} e uma expressão de Natal...`
         }
       />
 
       <DucksProofBox isHeaven={isHeaven} ducksLink={ducksLink} setDucksLink={setDucksLink} />
       <SubmitBar
         busy={busy}
-        disabled={!lenOk || !hasKeywords}
+        disabled={!lenOk || !hasKeywords || !hasXmasExpr}
         label="Enviar para revisão"
         onClick={handleSend}
       />
@@ -936,54 +943,83 @@ function Day11ClueHuntGame({ isHeaven, busy, onSend }) {
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
 function Day12HangmanGame({ isHeaven, busy, onSend }) {
-  const wordLength = isHeaven ? 9 : 8;
+  const secretWord = isHeaven ? 'GUIRLANDA' : 'PRESEPIO';
+  const wordLength = secretWord.length;
+
   const [tried, setTried] = useState([]);
-  const [guessWord, setGuessWord] = useState('');
+  const [typedWord, setTypedWord] = useState('');
   const [ducksLink, setDucksLink] = useState('');
 
+  const wrongLetters = tried.filter((ch) => !secretWord.includes(ch));
+  const wrongCount = wrongLetters.length;
+  const maxErrors = 8;
+  const failed = wrongCount > maxErrors;
+
+  const revealedSlots = secretWord.split('').map((ch) => (tried.includes(ch) ? ch : ''));
+  const allRevealed = revealedSlots.every(Boolean);
+
+  const cleanTyped = normalizeUpper(typedWord).replace(/[^A-Z]/g, '');
+  const finalWord = cleanTyped.length === wordLength ? cleanTyped : allRevealed ? secretWord : cleanTyped;
+
   const toggleLetter = (ch) => {
+    if (failed || allRevealed) return;
     setTried((prev) => (prev.includes(ch) ? prev : [...prev, ch]));
   };
 
-  const cleanWord = normalizeUpper(guessWord).replace(/[^A-Z]/g, '');
+  const resetHangman = () => {
+    setTried([]);
+    setTypedWord('');
+  };
 
   const handleSend = () => {
     const suffix = isHeaven && ducksLink.trim() ? `|ducks=${ducksLink.trim()}` : '';
-    onSend(`${cleanWord}|letters=${tried.join('')}${suffix}`);
+    onSend(`${finalWord}|letters=${tried.join('')}${suffix}`);
   };
 
   return (
     <div style={{ display: 'grid', gap: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span className="badge gold">{wordLength} letras</span>
+        <span className={`badge ${wrongCount >= 6 ? 'red' : ''}`}>
+          Erros: {wrongCount}/{maxErrors}
+        </span>
+      </div>
+
       <div style={{ display: 'flex', justifyContent: 'center', gap: 6, flexWrap: 'wrap' }}>
-        {Array.from({ length: wordLength }).map((_, i) => (
-          <span
-            key={i}
-            style={{
-              width: 28,
-              height: 34,
-              borderBottom: '2px solid var(--gold, #F4A51D)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 800,
-              fontSize: 16,
-            }}
-          >
-            {cleanWord[i] || ''}
-          </span>
-        ))}
+        {Array.from({ length: wordLength }).map((_, i) => {
+          const displayChar = cleanTyped[i] || revealedSlots[i] || '';
+          return (
+            <span
+              key={i}
+              style={{
+                width: 28,
+                height: 34,
+                borderBottom: '2px solid var(--gold, #F4A51D)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 800,
+                fontSize: 16,
+              }}
+            >
+              {displayChar}
+            </span>
+          );
+        })}
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
         {ALPHABET.map((ch) => {
           const used = tried.includes(ch);
+          const isHit = used && secretWord.includes(ch);
+          const isMiss = used && !secretWord.includes(ch);
           return (
             <button
               key={ch}
               type="button"
-              disabled={used}
+              disabled={used || failed || allRevealed}
               onClick={() => toggleLetter(ch)}
-              className={`btn ${used ? 'pine' : 'ghost'}`}
+              className={`btn ${isHit ? 'pine' : isMiss ? 'red' : 'ghost'}`}
               style={{ minWidth: 32, padding: '6px 8px' }}
             >
               {ch}
@@ -992,22 +1028,35 @@ function Day12HangmanGame({ isHeaven, busy, onSend }) {
         })}
       </div>
 
+      {failed && (
+        <div className="err">
+          Limite de 8 letras erradas atingido! Reinicie a forca para tentar novamente.
+        </div>
+      )}
+
       <input
         type="text"
         maxLength={wordLength}
-        value={guessWord}
-        onChange={(e) => setGuessWord(e.target.value)}
-        placeholder={`Digite a palavra completa (${wordLength} letras, sem acentos)...`}
+        value={typedWord}
+        onChange={(e) => setTypedWord(e.target.value)}
+        placeholder={`Ou digite a palavra completa (${wordLength} letras, sem acentos)...`}
       />
 
       <DucksProofBox isHeaven={isHeaven} ducksLink={ducksLink} setDucksLink={setDucksLink} />
-      <SubmitBar
-        busy={busy}
-        disabled={cleanWord.length !== wordLength}
-        label="Enviar palavra da forca"
-        extraInfo={`Letras marcadas: ${tried.length}`}
-        onClick={handleSend}
-      />
+
+      <div className="acts" style={{ marginTop: 8 }}>
+        <button type="button" className="btn ghost" onClick={resetHangman}>
+          Reiniciar forca
+        </button>
+        <button
+          type="button"
+          className="btn red"
+          disabled={busy || failed || finalWord.length !== wordLength}
+          onClick={handleSend}
+        >
+          {busy ? 'Validando...' : 'Enviar palavra da forca'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -1116,27 +1165,35 @@ function Day13SudokuGame({ isHeaven, busy, onSend }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Dia 17 — Cruzadinhas do castelo (5 horizontais -> vertical de 9 letras)    */
+/* Dia 17 — Cruzadinhas do castelo (9 horizontais -> vertical de 9 letras)    */
 /* -------------------------------------------------------------------------- */
 
 function Day17CrosswordGame({ isHeaven, busy, onSend }) {
   const clues = isHeaven
     ? [
-        '1. Astro que brilha no topo da árvore (7 letras)',
-        '2. Precipitação branca de inverno (4 letras)',
-        '3. Comunidade do evento no Ducks (6 letras)',
-        '4. Enfeite sonoro dourado de Natal (4 letras)',
-        '5. Mês da celebração natalina (8 letras)',
+        '1. [N] Precipitação branca de inverno (4 letras)',
+        '2. [A] Astro que brilha no topo da árvore (7 letras)',
+        '3. [T] Veículo do Noelvet puxado por renas (5 letras)',
+        '4. [A] Mensageiro celeste com asas (4 letras)',
+        '5. [L] Fita decorativa amarrada nos presentes (4 letras)',
+        '6. [I] Enfeite sonoro dourado de Natal (4 letras — 2ª letra)',
+        '7. [N] Guia oficial do festival de Natal (7 letras)',
+        '8. [O] Metal precioso das estrelas (4 letras)',
+        '9. [S] Onde Noelvet guarda os presentes (4 letras)',
       ]
     : [
-        '1. Comunidade do castelo no Discord (7 letras)',
-        '2. Animal que puxa o trenó (4 letras)',
-        '3. Cartinha enviada ao Noelvet (5 letras)',
-        '4. Luz no céu que guia os viajantes (7 letras)',
-        '5. Fortaleza do evento The Kingdom (7 letras)',
+        '1. [P] Árvore símbolo do Natal (8 letras)',
+        '2. [R] Animal que puxa o trenó (4 letras)',
+        '3. [E] Luz no topo da árvore (7 letras)',
+        '4. [S] Toca anunciando a festa (4 letras)',
+        '5. [E] Adorno pendurado nos galhos (7 letras)',
+        '6. [N] Flocos brancos de inverno (4 letras)',
+        '7. [T] Veículo do Noelvet na neve (5 letras)',
+        '8. [E] Onde vai a cartinha (8 letras)',
+        '9. [S] Marca colada na correspondência (4 letras)',
       ];
 
-  const [rows, setRows] = useState(['', '', '', '', '']);
+  const [rows, setRows] = useState(Array(9).fill(''));
   const [verticalWord, setVerticalWord] = useState('');
   const [ducksLink, setDucksLink] = useState('');
 
@@ -1149,7 +1206,10 @@ function Day17CrosswordGame({ isHeaven, busy, onSend }) {
   };
 
   return (
-    <div style={{ display: 'grid', gap: 8 }}>
+    <div style={{ display: 'grid', gap: 6 }}>
+      <p className="m small">
+        Resolva as 9 pistas horizontais e una as letras destacadas em <b>[colchetes]</b> de cima para baixo:
+      </p>
       {clues.map((c, idx) => (
         <div key={c}>
           <label className="m small">{c}</label>
@@ -1162,11 +1222,11 @@ function Day17CrosswordGame({ isHeaven, busy, onSend }) {
               copy[idx] = e.target.value;
               setRows(copy);
             }}
-            placeholder={`Palavra horizontal ${idx + 1}`}
+            placeholder={`Horizontal ${idx + 1}`}
           />
         </div>
       ))}
-      <div>
+      <div style={{ marginTop: 4 }}>
         <label className="m small"><b>Palavra vertical central (9 letras):</b></label>
         <input
           type="text"
@@ -1183,12 +1243,34 @@ function Day17CrosswordGame({ isHeaven, busy, onSend }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Dia 18 — Encontre as diferenças (grade 10x10, 6 coordenadas)               */
+/* Dia 18 — Encontre as diferenças (comparação visual 10x10, 6 diferenças)    */
 /* -------------------------------------------------------------------------- */
+
+const DIFF_BASE_ICONS = ['❄', '✦', '🎄', '🔔', '🕯', '★', '🎀', '🎁', '✨', '🦌'];
+
+const DIFF_ALTERATIONS = {
+  heaven: {
+    '1,2': '★',
+    '2,7': '🎁',
+    '4,4': '🔔',
+    '6,9': '🎀',
+    '8,3': '🦌',
+    '10,6': '🕯',
+  },
+  kingdom: {
+    '1,8': '🎄',
+    '3,2': '🔔',
+    '5,6': '🎁',
+    '7,4': '★',
+    '8,9': '🕯',
+    '10,1': '🎀',
+  },
+};
 
 function Day18SpotDiffGame({ isHeaven, busy, onSend }) {
   const [picked, setPicked] = useState([]);
   const [ducksLink, setDucksLink] = useState('');
+  const changes = isHeaven ? DIFF_ALTERATIONS.heaven : DIFF_ALTERATIONS.kingdom;
 
   const toggleCoord = (r, c) => {
     const id = `${r + 1},${c + 1}`;
@@ -1204,19 +1286,18 @@ function Day18SpotDiffGame({ isHeaven, busy, onSend }) {
     onSend(`DIFF6:${picked.join(';')}${suffix}`);
   };
 
-  return (
+  const renderGrid = (altered) => (
     <div>
-      <p className="m small" style={{ marginBottom: 8 }}>
-        Toque nas <b>6 coordenadas</b> (Linha,Coluna) onde há alterações na ilustração ({picked.length}/6 selecionadas):
-      </p>
-
+      <small className="m small" style={{ display: 'block', marginBottom: 4, fontWeight: 700 }}>
+        {altered ? 'Ilustração B (clique nas 6 diferenças)' : 'Ilustração A (original)'}
+      </small>
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(10, minmax(0, 1fr))',
-          gap: 3,
-          padding: 8,
-          borderRadius: 12,
+          gap: 2,
+          padding: 6,
+          borderRadius: 10,
           background: 'rgba(10, 8, 18, 0.82)',
           border: '1px solid rgba(244, 165, 29, 0.25)',
         }}
@@ -1224,28 +1305,46 @@ function Day18SpotDiffGame({ isHeaven, busy, onSend }) {
         {Array.from({ length: 10 }).map((_, r) =>
           Array.from({ length: 10 }).map((__, c) => {
             const id = `${r + 1},${c + 1}`;
-            const active = picked.includes(id);
+            const baseGlyph = DIFF_BASE_ICONS[(r * 3 + c * 7) % DIFF_BASE_ICONS.length];
+            const glyph = altered && changes[id] ? changes[id] : baseGlyph;
+            const active = altered && picked.includes(id);
+
             return (
               <button
                 key={id}
                 type="button"
-                onClick={() => toggleCoord(r, c)}
+                disabled={!altered}
+                onClick={() => altered && toggleCoord(r, c)}
                 title={`Linha ${r + 1}, Coluna ${c + 1}`}
                 style={{
                   aspectRatio: '1 / 1',
-                  borderRadius: 5,
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 4,
+                  border: active ? '1px solid #F4A51D' : '1px solid rgba(255,255,255,0.08)',
                   background: active ? '#A81E23' : 'rgba(255,255,255,0.04)',
                   color: '#F1E4D4',
-                  fontSize: 10,
-                  cursor: 'pointer',
+                  fontSize: 11,
+                  padding: 0,
+                  cursor: altered ? 'pointer' : 'default',
                 }}
               >
-                {active ? '✕' : `${r + 1}:${c + 1}`}
+                {glyph}
               </button>
             );
           })
         )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div>
+      <p className="m small" style={{ marginBottom: 8 }}>
+        Compare os dois quadros 10×10 e toque nas <b>6 células alteradas</b> na Ilustração B ({picked.length}/6):
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+        {renderGrid(false)}
+        {renderGrid(true)}
       </div>
 
       <DucksProofBox isHeaven={isHeaven} ducksLink={ducksLink} setDucksLink={setDucksLink} />
@@ -1427,6 +1526,17 @@ function Day23DeliveryRouteGame({ isHeaven, busy, onSend }) {
   const initialItems = isHeaven
     ? ['DOCE', 'SINO', 'LAÇO', 'LIVRO']
     : ['ESTRELA', 'NEVE', 'CARTA', 'PRESENTE'];
+  const clues = isHeaven
+    ? [
+        '• O LAÇO abre a rota às 18h.',
+        '• O SINO sai antes do DOCE.',
+        '• O LIVRO é entregue logo após o DOCE (21h).',
+      ]
+    : [
+        '• A CARTA sai às 18h.',
+        '• O PRESENTE sai antes da ESTRELA.',
+        '• A NEVE fecha a rota às 21h.',
+      ];
   const hours = ['18h', '19h', '20h', '21h'];
   const [order, setOrder] = useState(initialItems);
   const [ducksLink, setDucksLink] = useState('');
@@ -1447,6 +1557,12 @@ function Day23DeliveryRouteGame({ isHeaven, busy, onSend }) {
 
   return (
     <div style={{ display: 'grid', gap: 8 }}>
+      <div className="paper">
+        {clues.map((line) => (
+          <p key={line} className="m small" style={{ margin: '2px 0' }}>{line}</p>
+        ))}
+      </div>
+
       {order.map((item, idx) => (
         <div
           key={item}
@@ -1602,55 +1718,56 @@ function Day25FinaleGame({ isHeaven, busy, onSend }) {
 
 export function AdventDayGame({ day, isHeaven = false, busy = false, onSend }) {
   const d = Number(day) || 1;
+  const instanceKey = `${d}-${isHeaven ? 'heaven' : 'kingdom'}`;
   const props = { day: d, isHeaven, busy, onSend };
 
   switch (d) {
     case 1:
-      return <Day1ProfileGame {...props} />;
+      return <Day1ProfileGame key={instanceKey} {...props} />;
     case 2:
     case 14:
-      return <WordSearchGame {...props} />;
+      return <WordSearchGame key={instanceKey} {...props} />;
     case 3:
-      return <MemoryGame {...props} />;
+      return <MemoryGame key={instanceKey} {...props} />;
     case 4:
     case 15:
-      return <SorterGame {...props} />;
+      return <SorterGame key={instanceKey} {...props} />;
     case 5:
     case 19:
-      return <GuidedTextGame {...props} />;
+      return <GuidedTextGame key={instanceKey} {...props} />;
     case 6:
-      return <Day6RiddleGame {...props} />;
+      return <Day6RiddleGame key={instanceKey} {...props} />;
     case 7:
     case 16:
-      return <PortalFeatureMission {...props} />;
+      return <PortalFeatureMission key={instanceKey} {...props} />;
     case 8:
-      return <VitralPuzzleGame {...props} />;
+      return <VitralPuzzleGame key={instanceKey} {...props} />;
     case 9:
-      return <Day9BioGame {...props} />;
+      return <Day9BioGame key={instanceKey} {...props} />;
     case 10:
-      return <QuizDay10Game {...props} />;
+      return <QuizDay10Game key={instanceKey} {...props} />;
     case 11:
-      return <Day11ClueHuntGame {...props} />;
+      return <Day11ClueHuntGame key={instanceKey} {...props} />;
     case 12:
-      return <Day12HangmanGame {...props} />;
+      return <Day12HangmanGame key={instanceKey} {...props} />;
     case 13:
-      return <Day13SudokuGame {...props} />;
+      return <Day13SudokuGame key={instanceKey} {...props} />;
     case 17:
-      return <Day17CrosswordGame {...props} />;
+      return <Day17CrosswordGame key={instanceKey} {...props} />;
     case 18:
-      return <Day18SpotDiffGame {...props} />;
+      return <Day18SpotDiffGame key={instanceKey} {...props} />;
     case 20:
-      return <Day20CryptogramGame {...props} />;
+      return <Day20CryptogramGame key={instanceKey} {...props} />;
     case 21:
-      return <Day21BingoGame {...props} />;
+      return <Day21BingoGame key={instanceKey} {...props} />;
     case 22:
-      return <Day22AnagramGame {...props} />;
+      return <Day22AnagramGame key={instanceKey} {...props} />;
     case 23:
-      return <Day23DeliveryRouteGame {...props} />;
+      return <Day23DeliveryRouteGame key={instanceKey} {...props} />;
     case 24:
-      return <Day24FinalQuestGame {...props} />;
+      return <Day24FinalQuestGame key={instanceKey} {...props} />;
     case 25:
-      return <Day25FinaleGame {...props} />;
+      return <Day25FinaleGame key={instanceKey} {...props} />;
     default:
       return null;
   }
