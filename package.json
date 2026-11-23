@@ -19,7 +19,7 @@
     "@supabase/postgrest-js": "^2.119.2",
     "@supabase/supabase-js": "^2.119.0",
     "cookie-parser": "^1.4.7",
-    "express": "^4.21.2",
+    "express": "^5.3.0",
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0"
   },
