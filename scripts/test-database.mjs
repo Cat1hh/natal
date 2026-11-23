@@ -18,7 +18,7 @@ try {
   docker(['network', 'create', network]);
   docker(['run', '-d', '--name', pg, '--network', network, '-e', `POSTGRES_PASSWORD=${password}`, '-e', 'POSTGRES_USER=vulpora_owner', '-e', 'POSTGRES_DB=vulpora_natal', pgImage]);
   for (let i = 0; i < 60; i++) {
-    try { docker(['exec', pg, 'pg_isready', '-U', 'vulpora_owner', '-d', 'vulpora_natal']); break; }
+    try { docker(['exec', '-e', `PGPASSWORD=${password}`, pg, 'psql', '-h', '127.0.0.1', '-U', 'vulpora_owner', '-d', 'vulpora_natal', '-v', 'ON_ERROR_STOP=1', '-c', 'SELECT 1']); break; }
     catch { if (i === 59) throw new Error('PostgreSQL não ficou pronto'); await sleep(500); }
   }
   const files = ['000_core.sql', '001_admin.sql', '002_postgrest.sql'];

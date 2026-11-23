@@ -51,7 +51,7 @@ ${dockerfile.trim().split('\n').map(line => '        ' + line).join('\n')}
     command:
       - |
         for attempt in $$(seq 1 60); do
-          if pg_isready -q; then break; fi
+          if psql -q -v ON_ERROR_STOP=1 -c 'SELECT 1' >/dev/null 2>&1; then break; fi
           sleep 2
         done
         printf '%s' '${payload}' | base64 -d > /tmp/schema.sql
