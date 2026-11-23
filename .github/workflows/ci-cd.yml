@@ -43,7 +43,7 @@ jobs:
           WRANGLER_SEND_METRICS: false
       - uses: docker/setup-buildx-action@v3
       - name: Compilar imagem de teste
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           load: true
