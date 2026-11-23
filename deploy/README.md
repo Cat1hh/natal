@@ -58,3 +58,13 @@ O volume persiste os dados entre reinícios. Um backup anterior à troca de imag
 O registro nativo anterior `RRRkUAm9rkV6zczbplPBW` ficou desligado, com zero réplicas e o nome **Natal · Serviço anterior (desligado)**. A revisão automática bloqueou sua remoção por possível risco ao volume; o banco ativo está no Compose. Não inicie esse serviço antigo nem outro PostgreSQL usando o mesmo volume de dados simultaneamente. Para uma instalação nova fora desse servidor, crie os volumes externos antes do primeiro deploy; nesse servidor eles já existem.
 
 Referências: [configuração PostgREST](https://docs.postgrest.org/en/stable/references/configuration.html), [versões PostgreSQL](https://www.postgresql.org/support/versioning/).
+
+## Aplicação e túnel
+
+O portal usa a aplicação `MQdOmb9PN1EkT1tVKXoQc`, com Source Type Git e build pelo Dockerfile. O conector Cloudflare usa o Compose **Natal · Cloudflare Tunnel** (`BDryj5lsxlcBcfZj75vfA`) na mesma rede privada `dokploy-network`, sem publicar portas.
+
+O túnel exclusivo `d23790d6-6107-4210-be75-d64cc99b0370` aponta para `http://vulpora-natal-web-igwlkw:3000`. O endereço de validação é `https://natal-preview.vulpora.com.br`. O domínio principal só deve ser movido após configurar as chaves Google/Discord no Environment do Dokploy, ou após decisão explícita de usar inicialmente apenas login por e-mail. Os secrets do Worker não podem ser exportados pela API; mantenha o Worker atual até resolver essa configuração. Dados do Supabase anterior também não são migrados automaticamente.
+
+O token do túnel novo está no Environment do Compose e em `.env.dokploy-tunnel`, ignorado pelo Git e com permissão `0600`. Não o coloque no YAML. Para atualizar o conector, altere `deploy/Cloudflared.Dockerfile` e execute `node scripts/prepare-dokploy-tunnel.mjs`; atualize o Compose existente e faça deploy.
+
+A imagem do conector compila o código oficial 2026.11.1 com Go 1.27.4, `x/crypto` 0.59.0 e `x/net` 0.62.0 e usa Alpine atualizado. A imagem oficial analisada tinha 43 ocorrências de vulnerabilidades; a imagem corrigida passou no Trivy com zero alertas tanto no sistema quanto no binário Go. O CI também compila, executa e audita essa imagem.

@@ -54,6 +54,11 @@ jobs:
           cache-to: type=gha,scope=natal,mode=max
       - name: Auditar CVEs da imagem de produção
         run: bash scripts/scan-image.sh natal:ci
+      - name: Compilar e auditar conector Cloudflare
+        run: |
+          docker build --pull --no-cache-filter runtime --file deploy/Cloudflared.Dockerfile --tag natal-tunnel:ci .
+          docker run --rm natal-tunnel:ci version
+          bash scripts/scan-image.sh natal-tunnel:ci
       - name: Verificar container
         shell: bash
         run: |
