@@ -28,7 +28,11 @@ export function useHash() {
   useEffect(() => {
     const f = () => setH(get());
     addEventListener('hashchange', f);
-    return () => removeEventListener('hashchange', f);
+    addEventListener('popstate', f);
+    return () => {
+      removeEventListener('hashchange', f);
+      removeEventListener('popstate', f);
+    };
   }, []);
   return h;
 }

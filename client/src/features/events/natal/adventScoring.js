@@ -475,7 +475,13 @@ const getStorageKey = (isHeaven) => `${STORAGE_PREFIX}:${isHeaven ? 'heaven' : '
 export function loadAdventState(isHeaven = false) {
   try {
     const raw = localStorage.getItem(getStorageKey(isHeaven));
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const state = JSON.parse(raw);
+      if (state && Number.isFinite(state.points) && state.points >= 0 &&
+          state.missions && typeof state.missions === 'object' && !Array.isArray(state.missions)) {
+        return state;
+      }
+    }
   } catch {
     /* ignore */
   }

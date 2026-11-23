@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api, getRouteContext } from './api.js';
+import { getFrontendEntry } from './routes.js';
 import {
   DEFAULT_COMMUNITIES,
   getFallbackMeta,
@@ -32,16 +33,17 @@ export default function App() {
   const [toast, setToast] = useState('');
   const [burst, setBurst] = useState(0);
   const toastTimer = useRef(null);
+  const loadVersion = useRef(0);
 
   const navigateTo = useCallback((nextPath) => {
-    const [cleanPath, hashPart] = nextPath.split('#');
-    window.history.pushState(null, '', nextPath);
-    setPathname(cleanPath);
-    if (hashPart) {
-      window.location.hash = hashPart;
-    } else if (window.location.hash) {
-      window.history.replaceState(null, '', cleanPath);
+    if (getFrontendEntry(new URL(nextPath, window.location.origin).pathname) !== 'index.html') {
+      window.location.assign(nextPath);
+      return;
     }
+    window.history.pushState(null, '', nextPath);
+    setPathname(window.location.pathname);
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    setModal(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
@@ -65,12 +67,16 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(''), 2600);
   }, []);
 
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+
   const load = useCallback(async () => {
+    const version = ++loadVersion.current;
     setNetErr('');
     const ctx = getRouteContext(window.location.pathname);
     const m = await api.me();
+    if (version !== loadVersion.current) return;
     if (m.communities?.length) setCommunities(m.communities);
-    if (m.community) setCommunityMeta(m.community);
+    setCommunityMeta(m.community || null);
     if (!m.user) return setMe(null);
 
     setMe(m);
@@ -83,6 +89,7 @@ export default function App() {
 
     if (ctx.isCommunity) {
       const r = await api.ranking().catch(() => ({ ranking: [], me: null }));
+      if (version !== loadVersion.current) return;
       setRk(r);
       setEv(null);
       return;
@@ -95,6 +102,7 @@ export default function App() {
       api.letters(),
       api.gallery ? api.gallery().catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
     ]);
+    if (version !== loadVersion.current) return;
     setEv(e);
     setRk(r);
     setPz(p);
@@ -103,10 +111,22 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    setEv(null);
+    setRk(null);
+    setPz(null);
+    setCommunityMeta(null);
+    setLetters([]);
+    setGallery([]);
     load().catch(() => {
+      if (!active) return;
       setNetErr('Não foi possível conectar ao servidor. Verifique se o backend está rodando.');
       setMe(null);
     });
+    return () => {
+      active = false;
+      loadVersion.current++;
+    };
   }, [load, pathname]);
 
   const activeMeta = isPortal ? null : (communityMeta || getFallbackMeta(communitySlug));
@@ -152,6 +172,7 @@ export default function App() {
       await load();
     } catch (e) {
       say(e.message);
+      throw e;
     }
   };
 
@@ -179,6 +200,7 @@ export default function App() {
       }).catch(() => {});
     } catch (e) {
       say(e.message);
+      throw e;
     }
   };
 
@@ -232,6 +254,7 @@ export default function App() {
   };
 
   const logout = async () => {
+    loadVersion.current++;
     await api.logout().catch(() => {});
     setMe(null);
     setEv(null);

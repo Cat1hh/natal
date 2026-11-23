@@ -1,5 +1,6 @@
 import './boot.js'; // PRECISA ser o primeiro import
 import { handleAsNodeRequest } from 'cloudflare:node';
+import { getFrontendEntry } from './client/src/routes.js';
 
 globalThis.__CLOUDFLARE_WORKER__ = true;
 
@@ -66,20 +67,10 @@ export default {
       return Response.redirect(`${url.origin}${fixed}${url.search}`, 302);
     }
 
-    // Evento de Natal -> React (index.html)
-    if (/^\/comunidade\/[^/]+\/natal(\/|$)/i.test(path)) {
-      return page(request, env, '/index.html');
-    }
+    // Arquivos ausentes precisam manter o 404, sem retornar HTML como JavaScript/CSS.
+    if (/\.[^/]+$/.test(path)) return env.ASSETS.fetch(request);
 
-    // Rotas do portal acessadas sem "#" -> /#/...
-    if (/^\/(login|cadastro|comunidades|perfil(\/.*)?|usuario(\/.*)?|evento(\/.*)?|admin(\/.*)?|portal(\/.*)?|comunidade(\/.*)?)$/i.test(path)) {
-      const target = path
-        .replace(/^\/comunidades\/?$/i, '/portal/comunidades')
-        .replace(/^\/comunidade\/([^/]+)\/?$/i, '/comunidade/$1/inicio');
-      return Response.redirect(`${url.origin}/#${target}`, 302);
-    }
-
-    // "/" e o resto -> Portal Vulpora
-    return page(request, env, '/vulpora.html');
+    // O portal usa o app fornecido em vulpora.html; o evento usa o React compilado.
+    return page(request, env, `/${getFrontendEntry(path)}`);
   },
 };

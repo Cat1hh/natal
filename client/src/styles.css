@@ -1,0 +1,23 @@
+/* Complementos do React; a identidade visual vem dos estilos fornecidos em public/. */
+.adv-spot-day { display: none; }
+.advent-image-stage.is-fallback .advent-hotspots {
+  position: static;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+}
+.advent-image-stage.is-fallback .adv-spot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #8a2337, #351524);
+  color: var(--cream);
+}
+.advent-image-stage.is-fallback.is-heaven .adv-spot { background: linear-gradient(135deg, #245267, #142a3e); }
+.advent-image-stage.is-fallback .adv-spot-day { display: block; font-size: clamp(18px, 3vw, 32px); font-weight: 700; }
+.box { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.toast { max-width: calc(100vw - 32px); overflow-wrap: anywhere; }

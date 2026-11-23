@@ -1,0 +1,128 @@
+name: CI/CD · Dokploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: natal-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  ci:
+    name: Testes e imagem Docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            client/package-lock.json
+      - run: npm ci
+      - run: npm --prefix client ci
+      - name: Auditar dependências do backend e frontend
+        run: npm run audit:deps
+      - run: npm test
+      - name: Validar PostgreSQL, migrações e autenticação real
+        run: npm run test:database
+        env:
+          SCAN_DATABASE_IMAGE: "1"
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - run: npx wrangler deploy --dry-run --outdir /tmp/natal-worker-build
+        env:
+          WRANGLER_SEND_METRICS: false
+      - uses: docker/setup-buildx-action@v3
+      - name: Compilar imagem de teste
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          pull: true
+          no-cache-filters: runtime
+          tags: natal:ci
+          cache-from: type=gha,scope=natal
+          cache-to: type=gha,scope=natal,mode=max
+      - name: Auditar CVEs da imagem de produção
+        run: bash scripts/scan-image.sh natal:ci
+      - name: Verificar container
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'docker rm --force natal-ci >/dev/null 2>&1 || true' EXIT
+          docker run --detach --name natal-ci --publish 127.0.0.1:3000:3000 \
+            --env SUPABASE_URL=https://placeholder.supabase.co \
+            --env SUPABASE_SERVICE_ROLE_KEY=placeholder natal:ci
+          if ! curl --fail --silent --show-error --retry 20 --retry-connrefused \
+            --retry-delay 2 --retry-max-time 60 --max-time 5 \
+            http://127.0.0.1:3000/healthz | jq --exit-status '.ok == true'; then
+            docker logs natal-ci
+            exit 1
+          fi
+          curl --fail --silent --show-error http://127.0.0.1:3000/comunidade/heaven/natal | grep -q 'id="root"'
+          curl --fail --silent --show-error http://127.0.0.1:3000/ | grep -q 'id="app"'
+
+  deploy:
+    name: Implantar o commit validado no Dokploy
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Conferir configuração de deploy
+        id: config
+        env:
+          DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+          DOKPLOY_APPLICATION_ID: ${{ secrets.DOKPLOY_APPLICATION_ID }}
+          APP_URL: ${{ vars.APP_URL }}
+        run: |
+          if [[ -n "$DOKPLOY_URL" && -n "$DOKPLOY_API_KEY" && -n "$DOKPLOY_APPLICATION_ID" && -n "$APP_URL" ]]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo '::warning::CI concluído; deploy automático aguarda os secrets e APP_URL no environment production.'
+            echo 'Deploy automático pendente: configure o environment production conforme o README. Nenhum deploy foi solicitado.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Fixar o código validado em uma tag de deploy
+        if: steps.config.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          deploy_tag="dokploy-${GITHUB_SHA}"
+          existing_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${deploy_tag}" --jq '.object.sha' 2>/dev/null || true)"
+          if [[ -n "$existing_sha" ]]; then
+            [[ "$existing_sha" == "$GITHUB_SHA" ]] || { echo 'A tag existente aponta para outro commit.' >&2; exit 1; }
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" -f "ref=refs/tags/${deploy_tag}" -f "sha=${GITHUB_SHA}" >/dev/null
+          fi
+      - name: Atualizar referência e acompanhar implantação
+        if: steps.config.outputs.ready == 'true'
+        run: node scripts/deploy-dokploy.mjs
+        env:
+          DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+          DOKPLOY_APPLICATION_ID: ${{ secrets.DOKPLOY_APPLICATION_ID }}
+          APP_URL: ${{ vars.APP_URL }}
+          GIT_REF: dokploy-${{ github.sha }}
+          GIT_REPOSITORY: ${{ github.server_url }}/${{ github.repository }}.git
+          DEPLOYMENT_TITLE: GitHub ${{ github.sha }} · ${{ github.run_id }}-${{ github.run_attempt }}

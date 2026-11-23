@@ -91,8 +91,10 @@
     const name = String(c.name || '').toLowerCase().trim();
     return (
       id === 'the-kingdom' ||
+      id === 'thekingdom' ||
       id === 'kingdom' ||
       slug === 'the-kingdom' ||
+      slug === 'thekingdom' ||
       slug === 'kingdom' ||
       name === 'the kingdom' ||
       name === 'kingdom'
@@ -104,7 +106,8 @@
     const id = String(c.id || '').toLowerCase().trim();
     const slug = String(c.slug || '').toLowerCase().trim();
     const name = String(c.name || '').toLowerCase().trim();
-    return id === 'heavem' || slug === 'heavem' || name === 'heavem';
+    return ['heavem', 'heaven', 'ducks'].includes(id) ||
+      ['heavem', 'heaven', 'ducks'].includes(slug) || ['heavem', 'heaven'].includes(name);
   }
 
   function normalizeCommunityTheme(c) {
@@ -577,8 +580,8 @@
   const getCommunity = id => normalizeCommunityTheme(
       state.communities.find(x =>
         x.id === id ||
-        (isTheKingdom(x) && (id === 'the-kingdom' || id === 'kingdom')) ||
-        (isHeavem(x) && id === 'heavem')
+        (isTheKingdom(x) && ['the-kingdom', 'kingdom', 'thekingdom'].includes(id)) ||
+        (isHeavem(x) && ['heavem', 'heaven', 'ducks'].includes(id))
       )
     ),
     getEvent = id => state.events.find(x => x.id === id),
@@ -1566,7 +1569,7 @@
           <form id="form-auth" data-mode="${mode}" class="auth-form auth-form-animated">
             ${isRegister ? `<label>Nome de exibição<input name="name" required maxlength="50" placeholder="Seu nome mágico"></label>` : ''}
             <label>E-mail<input type="email" name="email" required placeholder="voce@universo.com"></label>
-            <label>Senha<input type="password" name="password" required minlength="4" placeholder="••••••••"></label>
+            <label>Senha<input type="password" name="password" required minlength="6" placeholder="••••••••"></label>
             <div id="auth-error" class="auth-error" ${initialError ? '' : 'hidden'}>${esc(initialError)}</div>
             <button type="submit" class="auth-submit-button">
               <span class="auth-button-label">${isRegister ? 'Despertar conta ✦' : 'Entrar no portal ✦'}</span>
@@ -2828,7 +2831,9 @@
   function route() {
     const rawHash = location.hash.replace(/^#\/?/, '') || 'portal/inicio';
     const [rawPath, rawQuery = ''] = rawHash.split('?');
-    const parts = decodeURIComponent(rawPath).split('/').filter(Boolean);
+    const parts = rawPath.split('/').filter(Boolean).map(part => {
+      try { return decodeURIComponent(part); } catch { return part; }
+    });
     const query = new URLSearchParams(rawQuery);
     const [root, p1, p2] = parts;
     closeModal();
@@ -3000,8 +3005,9 @@
           body: JSON.stringify(values)
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || 'Não foi possível autenticar.');
-        authUser = data.user || { id: uid(), name: values.name || values.email.split('@')[0], role: 'USER' };
+        if (!res.ok) throw new Error(data.message || data.error || 'Não foi possível autenticar.');
+        if (!data.user?.id) throw new Error('Resposta inválida do servidor. Tente novamente.');
+        authUser = data.user;
         syncAuthToUser();
         upsertSelfInDirectory();
         persist();

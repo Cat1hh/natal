@@ -1,6 +1,5 @@
 export function getRouteContext(pathname = typeof window !== "undefined" ? window.location.pathname : "/") {
   const clean = pathname.replace(new RegExp("/+$"), "") || "/";
-  const isPortal = clean === "/" || clean === "/login" || clean === "/comunidade";
   const match = clean.match(new RegExp("^/comunidade/([^/]+)(/natal(?:/.*)?)?$", "i"));
 
   if (!match) {
@@ -45,7 +44,12 @@ async function req(url, opts = {}) {
     ...opts,
     headers,
   });
-  const data = await res.json().catch(() => ({}));
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error('Resposta inválida do servidor. Tente novamente.');
+  }
   if (!res.ok) throw new Error(data.message || data.error || "Erro na requisição");
   return data;
 }

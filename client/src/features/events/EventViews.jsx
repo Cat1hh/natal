@@ -8,6 +8,7 @@ import {
   loadAdventState,
   resetAdventTestState,
   submitAdventMission,
+  validateMissionAnswer,
 } from './natal/adventScoring.js';
 import { isFinaleNow } from './finale.js';
 
@@ -15,15 +16,17 @@ const MEDAL_COLOR = ['#F4A51D', '#E2D8CE', '#C87D3B'];
 const TOTAL_DAYS = 25;
 const RANK_OPEN_DATE = new Date('2026-12-25T00:00:00-03:00').getTime();
 
-/* Modo de teste: libera todas as 25 missões e habilita controles rápidos de validação/aprovação.
-   Altere para false antes de publicar em produção. */
-const UNLOCK_ALL_FOR_TEST = true;
+// Os controles de teste exigem ativação explícita e ficam desabilitados no build de produção.
+const UNLOCK_ALL_FOR_TEST = import.meta.env.DEV && import.meta.env.VITE_ADVENT_TEST_MODE === 'true';
 
 /* Hook reativo para sincronizar pontos, status das portas e ranking em tempo real */
 function useLocalAdventProgress(isHeaven) {
-  const [state, setState] = useState(() => loadAdventState(isHeaven));
+  const [state, setState] = useState(() => UNLOCK_ALL_FOR_TEST
+    ? loadAdventState(isHeaven)
+    : { points: 0, missions: {} });
 
   useEffect(() => {
+    if (!UNLOCK_ALL_FOR_TEST) return;
     setState(loadAdventState(isHeaven));
     const sync = () => setState(loadAdventState(isHeaven));
     window.addEventListener('advent:state-updated', sync);
@@ -679,14 +682,13 @@ export function Home({ me = {}, ev = {}, communityMeta, letters = [], onOpen, on
 
 export function Calendar({ ev = {}, communityMeta, onMission }) {
   const [selectedDay, setSelectedDay] = useState(null);
+  const [imageFailed, setImageFailed] = useState(false);
   const missions = ev?.missions || [];
   const isHeaven = isHeavenCommunity(communityMeta);
   const localProg = useLocalAdventProgress(isHeaven);
-
   const hotspots = isHeaven ? HEAVEN_HOTSPOTS : KINGDOM_HOTSPOTS;
-  const calendarImage = isHeaven
-    ? '/assets/calendario-natal-heaven.jpg'
-    : '/assets/calendario-natal.jpg';
+  const calendarImage = isHeaven ? '/assets/calendario-natal-heaven.jpg' : '/assets/calendario-natal.jpg';
+  useEffect(() => setImageFailed(false), [isHeaven]);
 
   const doors = Array.from({ length: TOTAL_DAYS }, (_, i) => {
     const day = i + 1;
@@ -745,16 +747,10 @@ export function Calendar({ ev = {}, communityMeta, onMission }) {
         )}
       </div>
 
-      <div className={`advent-image-stage ${isHeaven ? 'is-heaven' : ''}`}>
-        <img
-          src={calendarImage}
-          alt={`Calendário do Advento de Natal · ${communityMeta?.name || 'Comunidade'}`}
-          className="advent-bg-img"
-        />
-
+      <div className={`advent-image-stage ${isHeaven ? 'is-heaven' : ''} ${imageFailed ? 'is-fallback' : ''}`}>
+        {!imageFailed && <img src={calendarImage} alt={`Calendário do Advento de Natal · ${communityMeta?.name || 'Comunidade'}`} className="advent-bg-img" onError={() => setImageFailed(true)} />}
         <div className="advent-hotspots">
           {doors.map((m) => {
-            const spot = hotspots[m.day];
             const isLocked = m.status === 'locked';
             const isDone = m.status === 'done';
             const isPending = m.status === 'pending';
@@ -767,7 +763,7 @@ export function Calendar({ ev = {}, communityMeta, onMission }) {
                 type="button"
                 disabled={isLocked}
                 onClick={() => handleSelect(m)}
-                style={spot}
+                style={imageFailed ? undefined : hotspots[m.day]}
                 className={[
                   'adv-spot',
                   isLocked ? 'is-locked' : 'is-open',
@@ -784,6 +780,7 @@ export function Calendar({ ev = {}, communityMeta, onMission }) {
                     : `Dia ${m.day} · ${m.title} (${m.level} · +${m.points} pts)`
                 }
               >
+                <span className="adv-spot-day">{dayStr}</span>
                 {isDone && (
                   <span className="adv-spot-badge done" aria-hidden="true">
                     ✓
@@ -1058,15 +1055,14 @@ export function MissionModal({ m, communityMeta, isHeaven: isHeavenProp, onSubmi
     setFeedback(null);
 
     try {
-      const result = submitAdventMission(enriched.day, serializedPayload, isHeaven);
-      setFeedback(result);
-
-      if (onSubmit) {
-        try {
-          await onSubmit(enriched.day, serializedPayload, result);
-        } catch {
-          /* Se a API remota ainda não estiver ativa no ambiente de teste, mantém o resultado local */
-        }
+      if (UNLOCK_ALL_FOR_TEST) {
+        const result = submitAdventMission(enriched.day, serializedPayload, isHeaven);
+        setFeedback(result);
+      } else {
+        const validation = validateMissionAnswer(enriched.day, serializedPayload, isHeaven);
+        if (!validation.ok) throw new Error(validation.reason);
+        if (!onSubmit) throw new Error('Não foi possível enviar. Tente novamente.');
+        await onSubmit(enriched.day, serializedPayload);
       }
     } catch (e) {
       setError(e?.message || 'Não foi possível enviar. Tente novamente.');

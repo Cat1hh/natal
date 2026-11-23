@@ -11,31 +11,37 @@
   <link rel="stylesheet" href="/global.css" />
   <script>
     (function () {
-      function checkNatalRedirect() {
-        var h = window.location.hash || "";
-        var mComm = h.match(/^#\/comunidade\/([^/]+)\/natal/i);
-        if (mComm) {
-          window.location.replace("/comunidade/" + mComm[1].toLowerCase() + "/natal#inicio");
+      function communitySlug(value) {
+        var slug = value.toLowerCase();
+        if (['ducks', 'heavem', 'heaven'].includes(slug)) return 'heaven';
+        if (['kingdom', 'the-kingdom', 'thekingdom'].includes(slug)) return 'thekingdom';
+        return slug;
+      }
+      function routeEntry() {
+        var hash = window.location.hash || '';
+        var event = hash.match(/^#\/comunidade\/([^/]+)\/natal(?:\/([^/?#]+))?(?:\?([^#]*))?$/i);
+        var oldEvent = hash.match(/^#\/evento\/(natal-2026(?:-heaven)?)(?:\/([^/?#]+))?(?:\?([^#]*))?$/i);
+        if (event || oldEvent) {
+          var slug = event ? communitySlug(event[1]) : (/heaven$/i.test(oldEvent[1]) ? 'heaven' : 'thekingdom');
+          var tab = event ? event[2] : oldEvent[2];
+          var query = event ? event[3] : oldEvent[3];
+          window.location.replace('/comunidade/' + slug + '/natal' + (query ? '?' + query : location.search) + '#' + (tab || 'inicio'));
           return;
         }
-        if (/^#\/evento\/natal-2026-heaven/i.test(h)) {
-          window.location.replace("/comunidade/heaven/natal#inicio");
-          return;
-        }
-        if (/^#\/evento\/natal-2026/i.test(h)) {
-          window.location.replace("/comunidade/thekingdom/natal#inicio");
+        var path = window.location.pathname;
+        if (path !== '/' && !/^\/(api|auth)(\/|$)/.test(path)) {
+          var target = path
+            .replace(/^\/(?:portal\/)?comunidades?\/?$/i, '/portal/comunidades')
+            .replace(/^\/comunidade\/([^/]+)(?:\/(.*))?$/i, function (_, slug, rest) {
+              return '/comunidade/' + communitySlug(slug) + '/' + (rest || 'inicio');
+            });
+          window.location.replace('/#' + target + window.location.search);
         }
       }
-      checkNatalRedirect();
-      window.addEventListener("hashchange", checkNatalRedirect);
+      routeEntry();
+      window.addEventListener('hashchange', routeEntry);
     })();
   </script>
-  <script>
-  if (location.pathname !== '/' && !location.pathname.startsWith('/api') && !location.pathname.startsWith('/auth')) {
-    const clean = location.pathname.replace(/^\/comunidade\/([^/]+)\/?$/, '/comunidade/$1/inicio');
-    location.replace('/#' + clean + location.search);
-  }
-</script>
 </head>
 <body>
   <div id="app"></div>

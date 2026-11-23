@@ -94,6 +94,7 @@ export function EventLayout({
   modal,
   setModal,
   burst,
+  navigateTo,
   onLogout,
   onCompleteMission,
   onWriteLetter,
@@ -113,14 +114,7 @@ export function EventLayout({
   const safeSlug = rawSlug === 'ducks' || rawSlug === 'heavem' ? 'heaven' : rawSlug;
   const isHeaven = safeSlug === 'heaven' || String(commName || '').toLowerCase().includes('heaven');
 
-  const goToPortal = (hashRoute) => {
-    const cleanHash = hashRoute.startsWith('/') ? hashRoute : `/${hashRoute}`;
-    const alreadyAtRoot = window.location.pathname === '/';
-    window.location.href = `/#${cleanHash}`;
-    if (alreadyAtRoot) {
-      window.location.reload();
-    }
-  };
+  const goToPortal = (nextPath) => navigateTo(nextPath);
 
   const tabs = [
     ['inicio', 'home', 'Início'],
@@ -187,7 +181,7 @@ export function EventLayout({
       onOpen={onOpenLetter}
       onWrite={() => setModal({ t: 'write' })}
       onMission={openMission}
-      onBackToCommunity={() => goToPortal(`/comunidade/${safeSlug}/eventos`)}
+      onBackToCommunity={() => goToPortal(`/comunidade/${safeSlug}`)}
     />
   );
 
@@ -260,7 +254,7 @@ export function EventLayout({
               type="button"
               className="btn ghost"
               style={{ width: '100%', justifyContent: 'center' }}
-              onClick={() => goToPortal(`/comunidade/${safeSlug}/eventos`)}
+              onClick={() => goToPortal(`/comunidade/${safeSlug}`)}
             >
               <Icon name="home" size={16} />
               <span>Voltar para {commName}</span>
@@ -275,7 +269,7 @@ export function EventLayout({
               <button
                 type="button"
                 className="crumb-link"
-                onClick={() => goToPortal('/portal/comunidades')}
+                onClick={() => goToPortal('/comunidade')}
               >
                 VULPORA
               </button>
@@ -283,7 +277,7 @@ export function EventLayout({
               <button
                 type="button"
                 className="crumb-link"
-                onClick={() => goToPortal(`/comunidade/${safeSlug}/eventos`)}
+                onClick={() => goToPortal(`/comunidade/${safeSlug}`)}
               >
                 {commTag}
               </button>

@@ -7,7 +7,7 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.js" },
     { "source": "/auth/(.*)", "destination": "/api/index.js" },
-    { "source": "/comunidade/:slug/natal", "destination": "/natal.html" },
-    { "source": "/comunidade/:path*", "destination": "/index.html" }
+    { "source": "/comunidade/:slug/natal/:path*", "destination": "/index.html" },
+    { "source": "/((?!.*\\.).*)", "destination": "/vulpora.html" }
   ]
 }

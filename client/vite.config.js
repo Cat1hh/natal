@@ -1,50 +1,30 @@
 import { defineConfig } from 'vite';
-import fs from 'node:fs';
-import path from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { getFrontendEntry } from './src/routes.js';
 
-function vulporaPortalRouting() {
+function portalRouting() {
   return {
     name: 'vulpora-portal-routing',
     configureServer(server) {
-      server.middlewares.use((req, res, next) => {
-        const url = (req.url || '').split('?')[0];
-        const isAsset =
-          url.startsWith('/api') ||
-          url.startsWith('/auth') ||
-          url.startsWith('/src') ||
-          url.startsWith('/@') ||
-          url.startsWith('/node_modules') ||
-          path.extname(url) !== '';
-
-        if (isAsset || /^\/comunidade\/[^/]+\/natal(\/|$)/i.test(url)) {
-          return next();
+      server.middlewares.use(async (req, res, next) => {
+        const pathname = new URL(req.url || '/', 'http://localhost').pathname;
+        if (!['GET', 'HEAD'].includes(req.method) ||
+            /^\/(?:api|auth|src|@[^/]*|node_modules)(?:\/|$)/.test(pathname) ||
+            /\.[^/]+$/.test(pathname) || getFrontendEntry(pathname) === 'index.html') return next();
+        try {
+          const html = await readFile(new URL('./public/vulpora.html', import.meta.url), 'utf8');
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          res.end(req.method === 'HEAD' ? '' : html);
+        } catch (error) {
+          next(error);
         }
-
-        // Converte qualquer acesso sem # para /#/... (igual ao server.js)
-        if (url !== '/') {
-          const target = url
-            .replace(/^\/comunidade\/ducks(?=\/|$)/i, '/comunidade/heaven')
-            .replace(/^\/comunidades\/?$/i, '/portal/comunidades')
-            .replace(/^\/comunidade\/([^/]+)\/?$/i, '/comunidade/$1/eventos');
-
-          res.writeHead(302, { Location: `/#${target}` });
-          return res.end();
-        }
-
-        const vulporaHtml = path.resolve(__dirname, 'public/vulpora.html');
-        if (fs.existsSync(vulporaHtml)) {
-          res.setHeader('Content-Type', 'text/html');
-          res.end(fs.readFileSync(vulporaHtml, 'utf-8'));
-          return;
-        }
-        next();
       });
     },
   };
 }
 
 export default defineConfig({
-  plugins: [vulporaPortalRouting()],
+  plugins: [portalRouting()],
   build: { outDir: '../public', emptyOutDir: true },
   server: {
     proxy: {

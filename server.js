@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import supabase from './db.js';
 import * as missionsMod from './missions.js';
+import { getFrontendEntry, normalizeAppPath } from './client/src/routes.js';
 
 const { MISSIONS, PRIZES, MILESTONES } = missionsMod;
 
@@ -124,7 +125,7 @@ function normalizeEventPath(rawPath, communitySlug, eventSlug) {
 }
 
 function mapCommunityRow(row) {
-  const events = Array.isArray(row.events) ? row.events : [];
+  const events = Array.isArray(row.events) && row.events.length ? row.events : (FALLBACK_COMMUNITIES[row.slug]?.events || []);
   return {
     slug: row.slug,
     tag: row.tag || row.name.toUpperCase(),
@@ -228,25 +229,13 @@ async function getCommunityMeta(slug) {
   };
 }
 
-function safeReturnPath(raw, fallback = '/#/portal/comunidades') {
-  const val = String(raw || '').trim();
-  if (!val) return fallback;
-  if (val.startsWith('/') && !/^\/[\/\\]/.test(val)) {
-    const normalized = val.replace(/^(\/#)?\/comunidade\/ducks(?=\/|$)/i, '$1/comunidade/heaven');
-    if (/^\/comunidade\/[^/]+\/natal(\/|$)/i.test(normalized)) {
-      return normalized;
-    }
-    if (normalized !== '/' && !normalized.startsWith('/#')) {
-      return `/#${normalized}`;
-    }
-    return normalized;
-  }
-  return fallback;
+function safeReturnPath(raw, fallback = '/comunidade') {
+  return normalizeAppPath(raw, fallback);
 }
 
 function oauthErrorRedirect(code) {
   const encoded = encodeURIComponent(code);
-  return `/?erro=${encoded}#/login?erro=${encoded}`;
+  return `/login?erro=${encoded}`;
 }
 
 function isUserAdmin(u) {
@@ -565,7 +554,7 @@ app.get(['/auth/discord', '/api/auth/discord'], (req, res) => {
   }
   const state = randomBytes(16).toString('hex');
   const redirectUri = getDiscordRedirectUri(req);
-  const returnTo = safeReturnPath(req.query.returnTo, '/#/portal/comunidades');
+  const returnTo = safeReturnPath(req.query.returnTo, '/comunidade');
 
   res.cookie('oauth_state', state, cookieOptions(req, 10 * 60 * 1000));
   res.cookie('oauth_return', returnTo, cookieOptions(req, 10 * 60 * 1000));
@@ -587,7 +576,7 @@ app.get(
     const clientSecret = getEnv('DISCORD_CLIENT_SECRET');
     const { code, state, error: oauthErr, error_description: oauthDesc } = req.query;
     const saved = req.cookies?.oauth_state;
-    const returnTo = safeReturnPath(req.cookies?.oauth_return, '/#/portal/comunidades');
+    const returnTo = safeReturnPath(req.cookies?.oauth_return, '/comunidade');
     const loginCommunity = extractCommunityFromPath(returnTo);
     const redirectUri = getDiscordRedirectUri(req);
 
@@ -694,7 +683,7 @@ app.get(
 app.get(['/auth/google', '/api/auth/google'], (req, res) => {
   const clientId = getEnv('GOOGLE_CLIENT_ID');
   const clientSecret = getEnv('GOOGLE_CLIENT_SECRET');
-  const returnTo = safeReturnPath(req.query.returnTo, '/#/portal/comunidades');
+  const returnTo = safeReturnPath(req.query.returnTo, '/comunidade');
   if (!clientId || !clientSecret) {
     return res.redirect(oauthErrorRedirect('google_config'));
   }
@@ -721,7 +710,7 @@ app.get(
     const clientSecret = getEnv('GOOGLE_CLIENT_SECRET');
     const { code, state } = req.query;
     const saved = req.cookies?.oauth_state;
-    const returnTo = safeReturnPath(req.cookies?.oauth_return, '/#/portal/comunidades');
+    const returnTo = safeReturnPath(req.cookies?.oauth_return, '/comunidade');
     const loginCommunity = extractCommunityFromPath(returnTo);
     const redirectUri = getGoogleRedirectUri(req);
     res.clearCookie('oauth_state', { path: '/' });
@@ -1408,6 +1397,10 @@ app.post(
       return res.status(400).json({ error: 'imagem_invalida', message: 'Selecione uma imagem válida (PNG, JPG ou WEBP).' });
     }
 
+    if (!getEnv('SUPABASE_URL') || !getEnv('SUPABASE_SERVICE_ROLE_KEY')) {
+      return res.status(503).json({ error: 'storage_nao_configurado', message: 'O armazenamento de imagens ainda não foi configurado.' });
+    }
+
     const contentType = match[1];
     const ext = contentType.split('/')[1] === 'jpeg' ? 'jpg' : contentType.split('/')[1];
     const buffer = Buffer.from(match[2], 'base64');
@@ -1534,31 +1527,17 @@ if (existsSync(CLIENT_DIST_DIR)) {
 }
 
 app.get(/^\/comunidade\/ducks(\/.*)?$/i, (req, res) => {
-  res.redirect(302, req.path.replace(/^\/comunidade\/ducks/i, '/comunidade/heaven'));
-});
-
-app.get(/^\/comunidade\/[^/]+\/natal(\/.*)?$/i, (req, res) => {
-  const builtEventHtml = path.join(PUBLIC_DIR, 'index.html');
-  const devEventHtml = path.join(CLIENT_DIR, 'index.html');
-  if (existsSync(builtEventHtml)) return res.sendFile(builtEventHtml);
-  if (existsSync(devEventHtml)) return res.sendFile(devEventHtml);
-  res.status(404).send('<h1>Build do evento não encontrado.</h1>');
-});
-
-app.get(/^\/(login|cadastro|comunidades|perfil(\/.*)?|usuario(\/.*)?|evento(\/.*)?|admin(\/.*)?|portal(\/.*)?|comunidade(\/.*)?)$/i, (req, res) => {
-  const target = req.path
-    .replace(/^\/comunidades\/?$/i, '/portal/comunidades')
-    .replace(/^\/comunidade\/([^/]+)\/?$/i, '/comunidade/$1/inicio');
-
-  res.redirect(302, `/#${target}`);
+  res.redirect(302, req.originalUrl.replace(/^\/comunidade\/ducks/i, '/comunidade/heaven'));
 });
 
 app.get('*', (req, res) => {
-  const builtPortalHtml = path.join(PUBLIC_DIR, 'vulpora.html');
-  const devPortalHtml = path.join(CLIENT_PUBLIC_DIR, 'vulpora.html');
-  if (existsSync(builtPortalHtml)) return res.sendFile(builtPortalHtml);
-  if (existsSync(devPortalHtml)) return res.sendFile(devPortalHtml);
-  res.status(404).send('<h1>Portal Vulpora (vulpora.html) não encontrado.</h1>');
+  if (path.extname(req.path)) return res.sendStatus(404);
+  const entry = getFrontendEntry(req.path);
+  const indexHtml = [PUBLIC_DIR, CLIENT_DIST_DIR, ...(entry === 'vulpora.html' ? [CLIENT_PUBLIC_DIR] : [])]
+    .map((dir) => path.join(dir, entry))
+    .find((file) => existsSync(file));
+  if (indexHtml) return res.sendFile(indexHtml);
+  res.status(503).send('<h1>Frontend ainda não compilado.</h1><p>Execute npm run build ou use o servidor de desenvolvimento do client.</p>');
 });
 
 app.use((err, req, res, next) => {
@@ -1572,11 +1551,11 @@ if (!IS_SERVERLESS) {
     const ev = eventState();
     console.log(
       `\nPortal Vulpora no ar!\n` +
-      `• Início (Portal):    http://localhost:${PORT}/#/\n` +
-      `• Login:              http://localhost:${PORT}/#/login\n` +
-      `• Seleção Comunidade: http://localhost:${PORT}/#/portal/comunidades\n` +
-      `• The Kingdom:        http://localhost:${PORT}/#/comunidade/thekingdom/inicio\n` +
-      `• Heaven:             http://localhost:${PORT}/#/comunidade/heaven/inicio\n` +
+      `• Início (Portal):    http://localhost:${PORT}/\n` +
+      `• Login:              http://localhost:${PORT}/login\n` +
+      `• Seleção Comunidade: http://localhost:${PORT}/comunidade\n` +
+      `• The Kingdom:        http://localhost:${PORT}/comunidade/thekingdom\n` +
+      `• Heaven:             http://localhost:${PORT}/comunidade/heaven\n` +
       `• Evento Natal:       http://localhost:${PORT}/comunidade/thekingdom/natal\n` +
       `(Evento Natal Mágico: ${ev.status}, dia ${ev.today})\n`
     );
